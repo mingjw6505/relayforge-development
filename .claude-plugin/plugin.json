@@ -1,9 +1,10 @@
 {
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
-  "name": "relayforge-product",
-  "version": "0.1.0",
-  "description": "Reusable product development workflows for RelayForge.",
+  "name": "relayforge-development",
+  "version": "0.1.2",
+  "description": "Reusable software development workflows for RelayForge projects.",
   "author": {
     "name": "RelayForge"
-  }
+  },
+  "repository": "https://github.com/mingjw6505/relayforge-development"
 }
