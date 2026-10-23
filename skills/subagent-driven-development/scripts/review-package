@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# Generate a review package for either a committed range or a selected
+# uncommitted worktree change. The recorded BASE (not HEAD~1) preserves
+# the entire task's review surface.
+#
+# Usage: review-package PLAN_FILE BASE HEAD|WORKTREE [OUTFILE] [PATHS_FILE]
+# Default OUTFILE: the plan workspace's review-<base7>..<head7>.diff.
+# WORKTREE fix rounds must pass distinct OUTFILEs to preserve prior packages.
+set -euo pipefail
+
+if [ $# -lt 3 ] || [ $# -gt 5 ]; then
+  echo "usage: review-package PLAN_FILE BASE HEAD|WORKTREE [OUTFILE] [PATHS_FILE]" >&2
+  exit 2
+fi
+
+plan=$1
+base=$2
+head=$3
+[ -f "$plan" ] || { echo "no such plan file: $plan" >&2; exit 2; }
+
+git rev-parse --verify --quiet "$base" >/dev/null || { echo "bad BASE: $base" >&2; exit 2; }
+if [ "$head" != WORKTREE ]; then
+  git rev-parse --verify --quiet "$head" >/dev/null || { echo "bad HEAD: $head" >&2; exit 2; }
+fi
+
+# Range guards (exit 3): a wrong-branch HEAD yields a range that is empty or
+# not rooted at BASE; either would silently produce a bogus review package.
+if [ "$head" = WORKTREE ]; then
+  [ "$(git rev-parse HEAD)" = "$(git rev-parse "$base")" ] || {
+    echo "HEAD moved since task BASE; review the checkpoint before packaging" >&2; exit 3;
+  }
+else
+  git merge-base --is-ancestor "$base" "$head" || { echo "HEAD is not a descendant of BASE: ${base}..${head}" >&2; exit 3; }
+  [ "$(git rev-list --count "${base}..${head}")" -gt 0 ] || { echo "empty commit range: ${base}..${head}" >&2; exit 3; }
+fi
+
+if [ $# -ge 4 ]; then
+  out=$4
+else
+  # Invoke via bash rather than direct exec: some extractors (Python zipfile)
+  # strip Unix exec bits when unpacking marketplace packages (#2040).
+  dir=$("${BASH:-bash}" "$(cd "$(dirname "$0")" && pwd)/sdd-workspace" "$plan")
+  if [ "$head" = WORKTREE ]; then
+    out="$dir/review-$(git rev-parse --short "$base")..worktree.diff"
+  else
+    out="$dir/review-$(git rev-parse --short "$base")..$(git rev-parse --short "$head").diff"
+  fi
+fi
+
+paths=()
+if [ $# -eq 5 ]; then
+  [ -f "$5" ] || { echo "missing paths file: $5" >&2; exit 2; }
+  mapfile -t paths < "$5"
+  [ "${#paths[@]}" -gt 0 ] || { echo "empty paths file: $5" >&2; exit 2; }
+fi
+
+if [ "$head" = WORKTREE ]; then
+  [ "${#paths[@]}" -gt 0 ] || paths=(.)
+  [ -n "$(git status --porcelain --untracked-files=all -- "${paths[@]}")" ] || {
+    echo "empty working-tree change for selected paths" >&2; exit 3;
+  }
+  {
+    echo "# Review package: ${base}..working tree"
+    echo
+    echo "## Files changed"
+    git diff --stat "$base" -- "${paths[@]}"
+    echo
+    echo "## Diff (tracked and staged)"
+    git diff -U10 "$base" -- "${paths[@]}"
+    echo
+    echo "## Untracked files"
+    while IFS= read -r -d '' file; do
+      git diff --no-index -U10 -- /dev/null "$file" || [ "$?" -eq 1 ]
+    done < <(git ls-files --others --exclude-standard -z -- "${paths[@]}")
+  } > "$out"
+  echo "wrote ${out}: working tree, $(wc -c < "$out" | tr -d ' ') bytes"
+  script_dir="$(cd "$(dirname "$0")" && pwd)"
+  "${BASH:-bash}" "$script_dir/trace-event" "$plan" review.package_created status=worktree source=observed >/dev/null || true
+  exit 0
+fi
+
+{
+  echo "# Review package: ${base}..${head}"
+  echo
+  echo "## Commits"
+  git log --oneline "${base}..${head}"
+  echo
+  echo "## Files changed"
+  if [ "${#paths[@]}" -gt 0 ]; then git diff --stat "${base}..${head}" -- "${paths[@]}"; else git diff --stat "${base}..${head}"; fi
+  echo
+  echo "## Diff"
+  if [ "${#paths[@]}" -gt 0 ]; then git diff -U10 "${base}..${head}" -- "${paths[@]}"; else git diff -U10 "${base}..${head}"; fi
+} > "$out"
+
+commits=$(git rev-list --count "${base}..${head}")
+echo "wrote ${out}: ${commits} commit(s), $(wc -c < "$out" | tr -d ' ') bytes"
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+"${BASH:-bash}" "$script_dir/trace-event" "$plan" review.package_created status=committed source=observed >/dev/null || true
