@@ -1,106 +1,55 @@
 ---
 name: requesting-code-review
-description: Use when completing tasks, implementing major features, or before merging to verify work meets requirements
+description: Run an implementation-independent review of a completed change when the user requests code review or selects it as a finishing action. Do not activate merely because a feature is large or implementation has ended.
 ---
 
 # Requesting Code Review
 
-Dispatch a code reviewer subagent to catch issues before they cascade. The reviewer gets precisely crafted context for evaluation — never your session's history.
+Review the work product against the requested behavior and concrete diff. This
+skill reports and classifies findings; authorization for commit, push, or other
+side effects remains separate.
 
-**Core principle:** Review early, review often.
+## Review inputs
 
-## When to Request Review
+Give the reviewer only what changes its judgment:
 
-**Mandatory:**
-- After each task in subagent-driven development
-- After completing major feature
-- Before merge to main
+- user-visible outcome and acceptance criteria;
+- repository constraints and relevant risks;
+- exact changed paths or a non-mutating diff package;
+- verification commands and results; and
+- known gaps or deferred Minor findings.
 
-**Optional but valuable:**
-- When stuck (fresh perspective)
-- Before refactoring (baseline check)
-- After fixing complex bug
+Do not give it the implementer's conclusion or the whole chat history. Use a
+different agent from the implementer when the host supports independent review.
+Otherwise review inline and label the result non-independent.
 
-## How to Request
+For committed changes, a range such as the merge base through `HEAD` can define
+the surface. For uncommitted work, capture tracked, staged, and task-owned
+untracked changes without staging or mutating Git. Exclude unrelated user work.
 
-For `subagent-driven-development`, use its task-scoped worktree package,
-separate reviewer capability map, and review report contract. Do not use
-the committed-range example below before the Controller checkpoint. The
-reviewer is read-only and must never be the implementer that wrote the code.
-If no independent subagent is available, state that limitation explicitly.
+Use [code-reviewer.md](code-reviewer.md) as the reviewer contract.
 
-For already committed changes outside SDD:
+## Finding levels
 
-**1. Get git SHAs:**
-```bash
-BASE_SHA=$(git rev-parse HEAD~1)  # or: git merge-base origin/main HEAD
-HEAD_SHA=$(git rev-parse HEAD)
-```
+- `Critical`: security, data loss, broken core behavior, or an unsafe release
+  condition. It blocks completion.
+- `Important`: requirement gap, likely regression, material reliability issue,
+  or missing proof for a core path. It blocks selected commit and push.
+- `Minor`: bounded maintainability or polish issue that can be disclosed and
+  deferred.
 
-**2. Dispatch code reviewer subagent:**
+Every finding cites concrete evidence and explains impact. Push back on an
+incorrect finding with code or test evidence rather than accepting it
+ceremonially.
 
-Dispatch a read-only reviewer subagent, filling the template at
-[code-reviewer.md](code-reviewer.md). Supply the diff package, capability map,
-and report path; use a named reviewer when available, otherwise a generic
-agent with the complete role prompt.
+## Repair and re-review
 
-**Placeholders:**
-- `{DESCRIPTION}` - Brief summary of what you built
-- `{PLAN_OR_REQUIREMENTS}` - What it should do
-- `{BASE_SHA}` - Starting commit
-- `{HEAD_SHA}` - Ending commit
+When this skill is called from `finishing-development`, return findings to the
+implementation owner. Automatically fix and re-review Critical and Important
+findings for no more than three rounds. Stop sooner when the fix needs new
+product scope, permission, or a material user decision. Re-review the fix delta
+and affected behavior, not an unrelated broad surface.
 
-**3. Act on feedback:**
-- Fix Critical issues immediately
-- Fix Important issues before proceeding
-- Note Minor issues for later
-- Push back if reviewer is wrong (with reasoning)
-
-## Example
-
-```
-[Just completed Task 2: Add verification function]
-
-You: Let me request code review before proceeding.
-
-BASE_SHA=$(git log --oneline | grep "Task 1" | head -1 | cut -d' ' -f1)
-HEAD_SHA=$(git rev-parse HEAD)
-
-[Dispatch code reviewer subagent]
-  DESCRIPTION: Added verifyIndex() and repairIndex() with 4 issue types
-  PLAN_OR_REQUIREMENTS: Task 2 from docs/relayforge/plans/deployment-plan.md
-  BASE_SHA: a7981ec
-  HEAD_SHA: 3df7661
-
-[Subagent returns]:
-  Strengths: Clean architecture, real tests
-  Issues:
-    Important: Missing progress indicators
-    Minor: Magic number (100) for reporting interval
-  Assessment: Ready to proceed
-
-You: [Fix progress indicators]
-[Continue to Task 3]
-```
-
-## Common Rationalizations
-
-| Excuse | Reality |
-|--------|---------|
-| "I'll just review the diff myself instead of dispatching a reviewer" | You're the coordinator — reviewing the diff inline burns the context window you need to keep driving the work. Dispatch a reviewer subagent: the diff and the evaluation live in its context, and only the findings come back to you. |
-| "The reviewer needs my whole session history to understand the change" | Hand it precisely crafted context, never your session's history. That keeps the reviewer on the work product, not your thought process. |
-
-## Red Flags
-
-**Never:**
-- Skip review because "it's simple"
-- Ignore Critical issues
-- Proceed with unfixed Important issues
-- Argue with valid technical feedback
-
-**If reviewer wrong:**
-- Push back with technical reasoning
-- Show code/tests that prove it works
-- Request clarification
-
-See template at: [code-reviewer.md](code-reviewer.md)
+The review passes when no Critical or Important finding remains. Disclose open
+Minor findings and whether the review was independent. A passed review does not
+imply tests, commit, push, CI, merge, or deployment occurred.

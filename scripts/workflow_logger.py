@@ -24,7 +24,18 @@ STALE_LOCK_SECONDS = 15.0
 LOG_PREFIX = "events-"
 STATE_FILE = "workflow-log-state.json"
 ROUTE_LINE_PATTERN = re.compile(
-    r"^Workflow route: (Quick|Standard) \| Planned skills: ([a-z0-9-]+(?:, [a-z0-9-]+)*|none)$",
+    r"^Workflow route: (Quick|Standard|Large) \| Work surfaces: "
+    r"([a-z0-9-]+(?:, [a-z0-9-]+)*|none) \| Planned skills: "
+    r"([a-z0-9-]+(?:, [a-z0-9-]+)*|none)[ \\t]*$",
+    re.MULTILINE,
+)
+STATUS_LINE_PATTERN = re.compile(
+    r"^Workflow status: Implementation=(complete|blocked) \| "
+    r"Minimal checks=(passed|failed|partial|unavailable) \| "
+    r"Test verification=(passed|failed|partial|skipped|unavailable) \| "
+    r"Code review=(passed|findings-open|skipped|unavailable) \| "
+    r"Commit=(completed|skipped|blocked|unavailable) \| "
+    r"Push=(completed|skipped|blocked|unavailable)[ \\t]*$",
     re.MULTILINE,
 )
 
@@ -46,9 +57,14 @@ def opaque_id(value: Any) -> Optional[str]:
 
 
 def data_directory(value: Optional[str] = None) -> Path:
-    configured = value or os.environ.get("PLUGIN_DATA") or os.environ.get("CLAUDE_PLUGIN_DATA")
+    configured = (
+        value
+        or os.environ.get("RELAYFORGE_WORKFLOW_LOG_DIR")
+        or os.environ.get("PLUGIN_DATA")
+        or os.environ.get("CLAUDE_PLUGIN_DATA")
+    )
     if not configured:
-        raise ValueError("PLUGIN_DATA or --data-dir is required")
+        raise ValueError("a plugin data directory or --data-dir is required")
     return Path(configured).expanduser().resolve()
 
 
@@ -194,8 +210,31 @@ def route_record(event: Dict[str, Any], now: datetime) -> Optional[Dict[str, Any
         return None
     record = base_record(event, "routing_decision", now)
     record["route"] = match.group(1).lower()
-    selected = match.group(2)
+    surfaces = match.group(2)
+    record["work_surfaces"] = [] if surfaces == "none" else surfaces.split(", ")
+    selected = match.group(3)
     record["planned_skills"] = [] if selected == "none" else selected.split(", ")
+    return record
+
+
+def status_record(event: Dict[str, Any], now: datetime) -> Optional[Dict[str, Any]]:
+    """Extract the declared finishing state without persisting the reply."""
+    message = event.get("last_assistant_message")
+    if not isinstance(message, str):
+        return None
+    match = STATUS_LINE_PATTERN.search(message)
+    if not match:
+        return None
+    record = base_record(event, "workflow_status", now)
+    keys = (
+        "implementation",
+        "minimal_checks",
+        "test_verification",
+        "code_review",
+        "commit",
+        "push",
+    )
+    record.update(zip(keys, match.groups()))
     return record
 
 
@@ -271,6 +310,9 @@ def handle_event(event: Dict[str, Any], root: Path, now: Optional[datetime] = No
                 planned_route = route_record(event, current_time)
                 if planned_route:
                     append_record(root, planned_route, current_time)
+                finishing_status = status_record(event, current_time)
+                if finishing_status:
+                    append_record(root, finishing_status, current_time)
             return event_name in {"Stop", "SubagentStop"}
 
     return event_name in {"Stop", "SubagentStop"}

@@ -1,7 +1,12 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "relayforge-development",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Reusable software development workflows for RelayForge projects.",
-  "repository": "https://github.com/mingjw6505/relayforge-development"
+  "repository": "https://github.com/mingjw6505/relayforge-development",
+  "extensions": {
+    "com.openai": {
+      "hooks": "./hooks/hooks.json"
+    }
+  }
 }

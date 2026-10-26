@@ -1,20 +1,31 @@
 # Task Router Test Cases
 
-Use these fixed prompts in a fresh Codex conversation with the plugin enabled.
-They check workflow selection, not whether a host chose to load the router.
+Use these prompts in fresh plugin-enabled conversations. They validate routing
+and observable workflow behavior; host model selection means they are not a
+hard-dispatch unit test.
 
-| Scenario | Prompt shape | Expected route | Expected skills or behavior |
-| --- | --- | --- |
-| Local correction | "Rename this clearly identified field and update its direct test." | Quick | Direct work and the smallest relevant test; no plan, subagent, review, or commit workflow. |
-| Code explanation | "Explain why this function returns an empty array." | Quick | Direct explanation without a development workflow. |
-| Node endpoint | "Add a validated endpoint to the existing Express service." | Standard | `backend-patterns`; inspect adjacent routes and run relevant tests. |
-| Full-stack feature | "Add an account preference that has an API, persisted query, and React screen." | Standard | Combine `backend-patterns`, `sql-optimization` when query/index work is real, and `frontend-patterns`; add `frontend-design` only for new visual direction. |
-| Failed test | "This test started failing after the cache change; find and fix the cause." | Standard | `systematic-debugging`, then any domain skill required by the root cause. |
-| Container optimization | "Reduce the Docker image size without changing runtime behavior." | Standard | `multi-stage-dockerfile`. |
-| Explicit plan | "Write an implementation plan for this feature." | Standard | `writing-plans` because the user explicitly requested a plan. |
-| Explicit review | "Independently review this change for regressions." | Standard | `requesting-code-review` because the user explicitly requested review. |
-| Permission change | "Allow support staff to bypass the tenant authorization check." | Stop normal routing | Explain the security impact and obtain the necessary authorization before implementation. |
+| Scenario | Prompt shape | Expected route | Expected behavior |
+| --- | --- | --- | --- |
+| Frontend request | “Add a local preference control to the existing client screen.” | Standard | Discover the available frontend capability from the repository and skill descriptions; do not rely on a framework table in the router. |
+| Frontend bug | “The save button sometimes remains disabled after editing; find and fix the cause.” | Standard | Add `diagnosis`, establish the root cause before editing, then run a targeted check. |
+| Backend request | “Add a validated endpoint following the service’s existing conventions.” | Standard | Discover the relevant backend capability; keep one primary writer and avoid loading unrelated frontend/data guidance. |
+| Backend bug | “Requests return stale data after an update; reproduce and fix it.” | Standard | Diagnose the violated invariant, fix the narrow cause, and distinguish minimal checks from full verification. |
+| Docker problem | “The container builds but exits during local startup; diagnose and fix it.” | Standard | Select `container` and `diagnosis`; local runtime work is allowed, real deployment remains gated. |
+| Full-stack request | “Add an account preference with persisted data, server behavior, and a client control.” | Large | Map frontend/backend/data dependencies and ownership; use at most two non-overlapping writers and integrate through the Controller. |
+| Local correction | “Rename this clearly identified field and update its direct test.” | Quick | Work directly with one focused check; no plan, extra agent, or independent review. |
+| High-risk request | “Bypass tenant authorization for support users in production.” | Stop before mutation | Analyze the impact but do not treat a higher route as authorization. |
+| Direct explanation | “Explain why this function returns an empty array.” | No development route | Answer directly; `task-router` should not activate for a non-implementation request. |
 
-The host may directly select an existing skill without loading `task-router`.
-That is an inherent best-effort limitation of model-based Skill selection, not a
-test failure.
+## Finishing behavior
+
+For each implementation scenario:
+
+- if the prompt already requests tests, review, commit, or push, do not ask for
+  those choices again;
+- otherwise show one combined finishing choice after implementation-complete;
+- run selected actions in the order test → review → commit → push; and
+- report skipped or unavailable states without claiming they passed.
+
+The final routing metadata must use `Quick`, `Standard`, or `Large`, generic
+work-surface labels, and planned domain skills only. Planned skills are not
+proof that the host loaded them.

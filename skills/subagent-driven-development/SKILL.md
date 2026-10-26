@@ -6,15 +6,16 @@ description: Use when executing implementation plans with independent tasks in t
 # Subagent-Driven Development
 
 Run a fresh implementer for each independent task, a separate task reviewer,
-scoped re-reviews after fixes, and one final whole-change review. This skill
-does not alter Quick / Standard / Large routing. Read the plugin's
-`agents/PROTOCOL.md`, role and responsibility metadata, and the current host
-adapter before dispatch. The main session is the Controller.
+scoped re-reviews after fixes, and one final whole-change review. This explicit
+workflow does not alter Quick / Standard / Large routing. The main session is
+the Controller.
 
 ## Setup
 
-Use `relayforge:using-git-worktrees` to create or verify an isolated workspace.
-Do not start implementation on main/master without explicit user consent.
+Use an isolated worktree when the repository and host support one safely.
+Otherwise verify the current worktree, branch, and ownership of existing
+changes before editing. Do not start implementation on main/master without
+explicit user consent.
 Run `bash scripts/sdd-workspace PLAN_FILE` from this skill directory; it prints
 this plan's ignored artifact directory. Keep a `progress.md` ledger there with
 `# SDD ledger — plan: <plan path>` as its first line. On resume, trust the
@@ -33,9 +34,9 @@ Do not silently dismiss defects mandated by plan text.
 The Controller chooses one role and relevant domain responsibility packs from
 the brief, changed surface, risk labels, and explicit user skill requests.
 Do not infer packs from Quick / Standard / Large. Before each dispatch write
-`task-N-implementer-capability-map.yaml` in the plan workspace with the fields in
-`agents/PROTOCOL.md`: required skill paths and reasons, excluded paths and
-reasons, read/write scope, risks, and model tier.
+`task-N-implementer-capability-map.yaml` in the plan workspace with: required
+skill paths and reasons, excluded paths and reasons, read/write scope, risks,
+and an abstract model tier.
 Explicit user-requested skills take priority. Hidden domain skills are read
 by exact path, not advertised as top-level skills. The child must read every
 required SKILL.md completely and list actually loaded paths in its report.
@@ -157,5 +158,5 @@ Before cleaning the plan workspace, collect every `Ruling:` line into the
 final message in ledger order, including the cost if wrong. Delete only this
 plan's workspace, only after the final review is clean and all artifacts are
 represented by confirmed Git checkpoints. Then use
-`relayforge:finishing-a-development-branch`. Never merge, push, publish, or
+`relayforge:finishing-development`. Never merge, push, publish, or
 perform another external side effect without its own authorization.

@@ -1,92 +1,118 @@
 ---
 name: task-router
-description: Classify software development work as Quick or Standard and select the minimal relevant RelayForge development skills. Use at the start of development work that needs workflow selection, including full-stack tasks; do not use for direct answers that need no implementation workflow.
+description: Classify implementation work as Quick, Standard, or Large and select the smallest useful set of available capabilities. Use at the start of code, configuration, debugging, container, or cross-surface implementation; skip direct explanations and other requests that need no development workflow.
 ---
 
 # Task Router
 
-Choose the lightest reliable workflow before loading other plugin skills. This
-skill orchestrates existing skills; it does not replace their instructions.
+Choose the lightest reliable route before loading implementation guidance. The
+router coordinates capabilities; it does not contain framework-specific
+development rules.
 
-## Boundaries
+## Preserve authority
 
-- Keep existing repository rules and explicit user instructions first.
-- Do not load skills just because they are available. Load each selected skill
-  only when its work surface is present.
-- Do not automatically create a plan, delegate to subagents, request an
-  independent review, or make a Git commit.
-- Lifecycle hooks record local tool timing automatically. They do not expose a
-  reliable event for actual skill loading, so never describe planned skills as
-  platform-confirmed usage data.
+- User instructions and repository rules override plugin defaults.
+- Routing never grants permission for credentials, production data, permission
+  changes, destructive actions, real deployment, or irreversible external
+  effects. Analyze safely, then obtain any authorization the host requires.
+- Do not infer permission to commit, push, publish, or deploy from a route.
 
-## Risk Check
+## Discover the work
 
-Before classifying, look for permissions, credentials, sensitive or production
-data, destructive operations, deployments, or irreversible external effects.
-These do not become ordinary Standard work. Follow the host's approval rules
-and obtain explicit authorization when it is required.
+Identify only what changes routing decisions:
 
-## Quick
+1. the requested outcome and whether the cause is known;
+2. affected work surfaces, using generic labels such as `frontend`, `backend`,
+   `data`, `container`, `diagnosis`, `integration`, or `general`;
+3. contracts or ordering between those surfaces;
+4. risk, reversibility, and the cheapest check that could catch the main
+   regression; and
+5. test, review, commit, or push actions already requested by the user.
 
-Use Quick when the target is clear, the change is local and low risk, and a
-small relevant check can validate it. Work directly:
+Do not classify from framework names. Inspect the repository and the
+descriptions of currently available skills, then select the minimum relevant
+capability set. Load a capability only when entering the surface it owns. A new
+language or framework skill must be discoverable without editing this router.
+If no specialist exists, continue with general repository conventions unless
+the missing expertise makes a correct result unsafe; disclose the fallback.
+Treat every negative activation boundary in a skill description as a hard
+constraint. Do not load a skill for a task it explicitly excludes.
+The core development workflow already includes reproduce-before-fix root-cause
+work. Do not add a generic debugging skill merely because a bug's cause starts
+unknown; select one only when the failure needs techniques beyond that core
+flow.
 
-1. Inspect only the files needed for the request.
-2. Make the focused change or answer.
-3. Run the smallest relevant verification.
-4. Report what changed and what was verified.
+## Choose a route
 
-Do not load another skill by default. A clear single-line fix, a local text
-change, or a direct code explanation are typical Quick work.
+### Quick
 
-## Standard
+Use Quick only when all are true:
 
-Use Standard for all other non-high-risk development work, including full-stack
-features, cross-module changes, and complex tasks. Larger scope alone does not
-require a heavier workflow in this plugin version.
+- the target and expected result are clear;
+- one local work surface is involved;
+- no unknown root cause must be diagnosed;
+- no cross-component contract, data compatibility, security boundary, or
+  deployment behavior changes; and
+- one cheap, focused check can catch the main regression.
 
-1. Identify the real work surfaces and dependencies.
-2. Select the relevant skills below. Multiple skills are allowed when each
-   owns a distinct part of the task.
-3. Load skills in dependency order. Avoid reading every candidate skill at
-   once.
-4. Implement as one coordinated task, following repository conventions.
-5. Run validation that covers the changed surfaces and state any gaps.
+Work directly in the current context. Do not create a plan, dispatch an agent,
+or load a domain skill by default. Use a specialist only when the small change
+genuinely depends on non-obvious domain rules.
 
-When this router is used, finish the response with one exact metadata line:
+Batch the initial file inspection when practical. After editing, run one
+focused evidence check; do not repeat equivalent `diff`, status, or file-read
+commands once the requested result is already established.
+
+### Standard
+
+Use Standard when any are true and Large does not apply:
+
+- the root cause is unknown;
+- several files or modules in one primary surface must change;
+- a specialist capability or several ordered steps are needed; or
+- integration risk is material but one writer can keep clear ownership.
+
+Load [development-workflow](../development-workflow/SKILL.md), then only the
+specialist skills selected from current availability.
+
+### Large
+
+Use Large when any are true:
+
+- two or more work surfaces have interface, data, or release dependencies;
+- multiple independently useful outputs need coordinated ownership and order;
+  or
+- integration risk is too broad for one context to hold the constraints
+  reliably.
+
+Load [development-workflow](../development-workflow/SKILL.md). Large means
+coordinated full-stack work, not automatically maximum agents or maximum
+process.
+
+## Route handoff
+
+Pass the selected route, work surfaces, dependency notes, planned specialist
+skills, known risks, and any preselected post-development actions to the next
+workflow. For Standard and Large, `development-workflow` owns implementation.
+After any route reaches implementation-complete, use
+[finishing-development](../finishing-development/SKILL.md).
+
+Keep the planned specialist list stable through the turn. If the response
+announces or loads a specialist as part of this route, include it in `Planned
+skills`; use `none` only when no specialist was selected. Do not silently drop
+a selected skill from the final metadata.
+
+When this router is used, include exactly one route metadata line in the final
+response:
 
 ```text
-Workflow route: Standard | Planned skills: backend-patterns, frontend-patterns
+Workflow route: Standard | Work surfaces: diagnosis | Planned skills: none
 ```
 
-For Quick work, use `Workflow route: Quick | Planned skills: none`. List only
-skills selected by this router. The local Hook extracts only this line for
-telemetry and discards the surrounding response; planned skills are not proof
-that the host loaded them.
-
-Use these existing skills when applicable:
-
-| Work surface | Skill |
-| --- | --- |
-| Unexpected behavior, failing tests, or a bug with an unclear cause | `systematic-debugging` |
-| Node.js, Express, or Next.js server work | `backend-patterns` |
-| Backend architecture, API, data model, integration, or scalability review | `backend-design-review` |
-| SQL execution plans, indexes, slow queries, pagination, or batch processing | `sql-optimization` |
-| React or Next.js UI state, rendering, or performance work | `frontend-patterns` |
-| New UI visual direction or a substantial UI redesign | `frontend-design` |
-| Docker image construction, cache, size, or image hardening work | `multi-stage-dockerfile` |
-
-The following are explicit-only workflows. Use them only when the user asks
-for that outcome, or when another applicable repository rule explicitly
-requires it:
-
-| Requested outcome | Skill |
-| --- | --- |
-| An implementation plan | `writing-plans` |
-| Subagent-based implementation | `subagent-driven-development` |
-| Independent code review | `requesting-code-review` |
-| A commit message or commit workflow | `caveman-commit` |
-
-When skill guidance conflicts, prefer explicit user instructions, repository
-rules, and the established architecture. Do not infer Git, deployment, or
-other external-operation authorization from the selected workflow.
+Use `none` when no specialist skill is planned. `Planned skills` lists domain
+capabilities selected by this router, not the three core workflow skills. The
+line declares a plan; it is not proof that the host loaded those skills.
+Emit it as plain text with no trailing spaces or Markdown hard break.
+The example values are illustrative, not defaults. Include `data` only for a
+real persistence, schema, or query surface; use `integration` for a shared
+contract with no data-layer change.

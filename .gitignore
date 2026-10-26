@@ -6,6 +6,10 @@ node_modules/
 dist/
 build/
 .codex-log/
+.relayforge/
 .claude/
 __pycache__/
 *.py[cod]
+
+# Local RelayForge product-workflow artifacts (PRDs, specs, tickets, and state)
+docs/relayforge/

@@ -79,7 +79,11 @@ class WorkflowLoggingTests(unittest.TestCase):
                     "hook_event_name": "Stop",
                     "session_id": "session-secret",
                     "turn_id": "turn-secret",
-                    "last_assistant_message": "Changed the endpoint.\nWorkflow route: Standard | Planned skills: backend-patterns, frontend-patterns",
+                    "last_assistant_message": (
+                        "Changed the endpoint.\n"
+                        "Workflow route: Large | Work surfaces: frontend, backend | "
+                        "Planned skills: backend-patterns, frontend-patterns  "
+                    ),
                 },
                 root,
                 datetime(2026, 10, 26, tzinfo=timezone.utc),
@@ -88,13 +92,48 @@ class WorkflowLoggingTests(unittest.TestCase):
             path = root / "logs" / "events-2026-10-26.jsonl"
             events = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
             self.assertEqual(events[1]["event"], "routing_decision")
-            self.assertEqual(events[1]["route"], "standard")
+            self.assertEqual(events[1]["route"], "large")
+            self.assertEqual(events[1]["work_surfaces"], ["frontend", "backend"])
             self.assertEqual(events[1]["planned_skills"], ["backend-patterns", "frontend-patterns"])
             self.assertNotIn("Changed the endpoint", path.read_text(encoding="utf-8"))
 
             report = ANALYZER.analyze(events, 0)
-            self.assertEqual(report["routing"]["route_counts"], {"standard": 1})
+            self.assertEqual(report["routing"]["route_counts"], {"large": 1})
+            self.assertEqual(report["routing"]["work_surface_counts"], {"backend": 1, "frontend": 1})
             self.assertEqual(report["routing"]["planned_skill_counts"]["backend-patterns"], 1)
+
+    def test_stop_event_extracts_finishing_status_without_reply_content(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            LOGGER.handle_event(
+                {
+                    "hook_event_name": "Stop",
+                    "session_id": "session-secret",
+                    "turn_id": "turn-secret",
+                    "last_assistant_message": (
+                        "Implementation finished.\n"
+                        "Workflow status: Implementation=complete | Minimal checks=passed | "
+                        "Test verification=partial | Code review=findings-open | "
+                        "Commit=blocked | Push=skipped  "
+                    ),
+                },
+                root,
+                datetime(2026, 10, 26, tzinfo=timezone.utc),
+            )
+
+            path = root / "logs" / "events-2026-10-26.jsonl"
+            content = path.read_text(encoding="utf-8")
+            events = [json.loads(line) for line in content.splitlines()]
+            self.assertEqual(events[1]["event"], "workflow_status")
+            self.assertEqual(events[1]["implementation"], "complete")
+            self.assertEqual(events[1]["test_verification"], "partial")
+            self.assertEqual(events[1]["code_review"], "findings-open")
+            self.assertEqual(events[1]["commit"], "blocked")
+            self.assertNotIn("Implementation finished", content)
+
+            report = ANALYZER.analyze(events, 0)
+            self.assertEqual(report["workflow_status"]["implementation"], {"complete": 1})
+            self.assertEqual(report["workflow_status"]["commit"], {"blocked": 1})
 
     def test_retention_removes_only_expired_daily_logs(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -173,6 +212,22 @@ class WorkflowLoggingTests(unittest.TestCase):
             logged = next((Path(temporary) / "logs").glob("events-*.jsonl")).read_text(encoding="utf-8")
             self.assertNotIn("do-not-record", logged)
             self.assertNotIn("session-secret", logged)
+
+    def test_forward_test_log_override_wins_over_managed_plugin_data(self):
+        with tempfile.TemporaryDirectory() as managed, tempfile.TemporaryDirectory() as isolated:
+            environment = os.environ.copy()
+            environment["PLUGIN_DATA"] = managed
+            environment["RELAYFORGE_WORKFLOW_LOG_DIR"] = isolated
+            subprocess.run(
+                [sys.executable, str(ROOT / "scripts" / "workflow_logger.py")],
+                input=json.dumps({"hook_event_name": "UserPromptSubmit"}),
+                text=True,
+                capture_output=True,
+                check=True,
+                env=environment,
+            )
+            self.assertTrue(list((Path(isolated) / "logs").glob("events-*.jsonl")))
+            self.assertFalse((Path(managed) / "logs").exists())
 
     def test_stop_hook_command_returns_required_json_acknowledgement(self):
         with tempfile.TemporaryDirectory() as temporary:

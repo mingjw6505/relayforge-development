@@ -80,7 +80,9 @@ def analyze(records: List[Dict[str, Any]], malformed: int) -> Dict[str, Any]:
     turn_started: Dict[Tuple[str, str], datetime] = {}
     turn_finished: Dict[Tuple[str, str], datetime] = {}
     routes: Counter[str] = Counter()
+    work_surfaces: Counter[str] = Counter()
     planned_skills: Counter[str] = Counter()
+    workflow_status: Dict[str, Counter[str]] = defaultdict(Counter)
     interrupted = 0
 
     for record in records:
@@ -102,6 +104,22 @@ def analyze(records: List[Dict[str, Any]], malformed: int) -> Dict[str, Any]:
             skills = record.get("planned_skills")
             if isinstance(skills, list):
                 planned_skills.update(skill for skill in skills if isinstance(skill, str))
+            surfaces = record.get("work_surfaces")
+            if isinstance(surfaces, list):
+                work_surfaces.update(surface for surface in surfaces if isinstance(surface, str))
+
+        if event == "workflow_status":
+            for field in (
+                "implementation",
+                "minimal_checks",
+                "test_verification",
+                "code_review",
+                "commit",
+                "push",
+            ):
+                value = record.get(field)
+                if isinstance(value, str):
+                    workflow_status[field][value] += 1
 
         tool_id = record.get("tool_use_id")
         tool_key_value = (record.get("session_id"), record.get("turn_id"), tool_id)
@@ -133,7 +151,12 @@ def analyze(records: List[Dict[str, Any]], malformed: int) -> Dict[str, Any]:
         "turn_timing": summary(turn_durations),
         "routing": {
             "route_counts": dict(sorted(routes.items())),
+            "work_surface_counts": dict(sorted(work_surfaces.items())),
             "planned_skill_counts": dict(sorted(planned_skills.items())),
+        },
+        "workflow_status": {
+            field: dict(sorted(counts.items()))
+            for field, counts in sorted(workflow_status.items())
         },
         "tool_outcomes": dict(sorted(outcomes.items())),
         "interrupted_turns": interrupted,
@@ -144,6 +167,7 @@ def analyze(records: List[Dict[str, Any]], malformed: int) -> Dict[str, Any]:
             "Routing entries are router-declared planned skills, not platform-confirmed skill usage.",
             "Codex does not emit a stable event when a skill is loaded, so this report does not claim actual skill usage.",
             "Token usage is not included because Hooks do not provide a reliable token metric.",
+            "Human decision counts require an external benchmark record; Hook turn counts do not prove a decision was required.",
         ],
     }
 

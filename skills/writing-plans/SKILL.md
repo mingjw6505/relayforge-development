@@ -1,6 +1,6 @@
 ---
 name: writing-plans
-description: Use when you have a spec or requirements for a multi-step task, before touching code
+description: Create a durable implementation plan when the user explicitly asks for one, implementation will be deferred, or work must be handed across sessions or teams. Do not use for an already-approved task being implemented now; development-workflow owns its compact execution map.
 ---
 
 # Writing Plans
@@ -11,14 +11,15 @@ Write implementation plans for an engineer who has not seen this codebase or thi
 
 **Announce at start:** "I'm using the writing-plans skill to create the implementation plan."
 
-**Context:** If working in an isolated worktree, it should have been created via the `relayforge:using-git-worktrees` skill at execution time.
+**Context:** Record whether execution will use the current worktree or a safely
+isolated worktree. Worktree creation belongs to execution, not plan writing.
 
 **Save Controller plans to:** the ignored RelayForge runtime workspace for
 this plan, not project documentation. Choose a stable path under
 `<repo-root>/.relayforge/plans/` and ensure it is ignored before writing.
 Project instructions or the user's explicit request can require a separate
-project-visible implementation plan; follow the project's `docs-hub` or other
-document convention for that deliverable. If no project convention exists,
+project-visible implementation plan; follow the project's documentation
+convention for that deliverable. If no project convention exists,
 use `docs/relayforge/plans/YYYY-MM-DD-<feature-name>.md` for a *visible*
 plan only. Task briefs, ledgers, reports, and commit packets remain internal.
 
@@ -78,7 +79,7 @@ request from the human partner overrides the conversation-language default.
 ```markdown
 # [Feature Name] Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use relayforge:subagent-driven-development (recommended) or relayforge:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** Use relayforge:development-workflow to implement this plan. Use relayforge:subagent-driven-development only when the user explicitly selected its heavier per-task review workflow. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** [One sentence describing what this builds]
 
@@ -202,18 +203,15 @@ If you find issues, fix them inline. No need to re-review — just fix and move 
 
 After saving and self-reviewing the plan, link its actual path for your human
 partner to read and obtain plan confirmation before implementation. Preserve
-an execution method the user already chose. When this plan is routed from
-`relayforge:using-relayforge`, use that mode's default executor unless the
-user requests another; do not ask them to choose again solely because the
-plan is complete. Outside classified development intake, ask them to choose
-an execution method if none was supplied.
+an execution method the user already chose; do not ask again solely because the
+plan is complete. If no execution method was supplied, ask once.
 
 **When no execution method or classified mode has already been supplied:**
 
 **"Plan complete and saved to `<actual-plan-path>`. Please review the plan. Which execution approach would you prefer?**
 
 - **Subagent-driven** - A fresh subagent implements each task and a fresh reviewer checks it before the next one starts, then a whole-branch review at the end. Most thorough; costs a fresh context per task and per review.
-- **Native** - I implement every task myself in this session, the way this harness runs work, then one fresh reviewer on the most capable model checks the whole branch. Cheapest and fastest; no independent review until the end. Runs well with a mid-tier session model, since the plan carries the design.
+- **Native** - Use `development-workflow` with one primary implementation context and proportional checks. Cheapest and fastest; independent review remains a finishing choice.
 
 **For this plan I recommend <one of the two>, because <one sentence from the plan: how much the tasks depend on each other's interfaces, how many there are, what a shipped mistake would cost>. Does the plan capture what you want, and which approach should we use?"**
 
@@ -225,4 +223,4 @@ an execution method if none was supplied.
 - **REQUIRED SUB-SKILL:** Use relayforge:subagent-driven-development
 
 **If Native chosen or selected by the classified mode:**
-- **REQUIRED SUB-SKILL:** Use relayforge:executing-plans
+- **REQUIRED SUB-SKILL:** Use relayforge:development-workflow
