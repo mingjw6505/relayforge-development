@@ -1,0 +1,117 @@
+{
+  "description": "Metadata-only local workflow telemetry for RelayForge Development.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/scripts/workflow_logger.py\"",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\scripts\\workflow_logger.py\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/scripts/workflow_logger.py\"",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\scripts\\workflow_logger.py\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/scripts/workflow_logger.py\"",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\scripts\\workflow_logger.py\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/scripts/workflow_logger.py\"",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\scripts\\workflow_logger.py\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/scripts/workflow_logger.py\"",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\scripts\\workflow_logger.py\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/scripts/workflow_logger.py\"",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\scripts\\workflow_logger.py\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/scripts/workflow_logger.py\"",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\scripts\\workflow_logger.py\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/scripts/workflow_logger.py\"",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\scripts\\workflow_logger.py\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "Interrupt": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$PLUGIN_ROOT/scripts/workflow_logger.py\"",
+            "commandWindows": "py -3 \"%PLUGIN_ROOT%\\scripts\\workflow_logger.py\"",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  }
+}
