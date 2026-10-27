@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# Append one privacy-bounded workflow event to a plan's local trace journal.
+# Usage: trace-event PLAN_FILE EVENT key=value [key=value ...]
+set -euo pipefail
+
+if [ $# -lt 2 ]; then
+  echo "usage: trace-event PLAN_FILE EVENT key=value [key=value ...]" >&2
+  exit 2
+fi
+
+plan=$1
+event=$2
+shift 2
+
+case "$event" in
+  *[!a-zA-Z0-9._-]*|'')
+    echo "invalid event name: $event" >&2
+    exit 2
+    ;;
+esac
+
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+dir="$("${BASH:-bash}" "$script_dir/sdd-workspace" "$plan")"
+trace_id="$(cat "$dir/trace-id")"
+
+json_escape() {
+  printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
+}
+
+line="{\"timestamp\":\"$(json_escape "$(date -u +%Y-%m-%dT%H:%M:%SZ)")\",\"trace_id\":\"$(json_escape "$trace_id")\",\"event\":\"$(json_escape "$event")\""
+for field in "$@"; do
+  case "$field" in
+    *=*) ;;
+    *)
+      echo "trace field must use key=value: $field" >&2
+      exit 2
+      ;;
+  esac
+
+  key=${field%%=*}
+  value=${field#*=}
+  case "$key" in
+    task|status|skill|source|role|agent_id|report|round|reason|pack|base|mode|kind) ;;
+    *)
+      echo "trace field is not permitted: $key" >&2
+      exit 2
+      ;;
+  esac
+  case "$value" in
+    *[[:cntrl:]]*)
+      echo "trace field contains control characters: $key" >&2
+      exit 2
+      ;;
+  esac
+  if [ "${#value}" -gt 200 ]; then
+    echo "trace field exceeds 200 characters: $key" >&2
+    exit 2
+  fi
+  case "$key:$value" in
+    source:observed|source:declared|source:inferred|status:passed|status:failed|status:blocked|status:completed|status:worktree|status:committed|status:selected|status:loaded|mode:Quick|mode:Standard|mode:Large) ;;
+    task:*|round:*) [[ "$value" =~ ^[0-9]+$ ]] || { echo "trace field must be numeric: $key" >&2; exit 2; } ;;
+    base:*) [[ "$value" =~ ^[a-fA-F0-9]{7,40}$ ]] || { echo "trace base must be a commit hash" >&2; exit 2; } ;;
+    skill:*|pack:*|kind:*|role:*|agent_id:*|reason:*) [[ "$value" =~ ^[a-zA-Z0-9._:/-]+$ ]] || { echo "trace field must be an identifier: $key" >&2; exit 2; } ;;
+    report:*) [[ "$value" =~ ^[a-zA-Z0-9._/-]+$ ]] || { echo "trace report must be a path or identifier" >&2; exit 2; } ;;
+    *) echo "trace value is not permitted: $key" >&2; exit 2 ;;
+  esac
+  line+=",\"$(json_escape "$key")\":\"$(json_escape "$value")\""
+done
+
+printf '%s}\n' "$line" >> "$dir/trace.jsonl"

@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Print a compact, local summary of one plan's workflow trace.
+# Usage: trace-summary PLAN_FILE
+set -euo pipefail
+
+if [ $# -ne 1 ]; then
+  echo "usage: trace-summary PLAN_FILE" >&2
+  exit 2
+fi
+
+plan=$1
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+dir="$("${BASH:-bash}" "$script_dir/sdd-workspace" "$plan")"
+trace="$dir/trace.jsonl"
+[ -f "$trace" ] || { echo "trace not found: $trace" >&2; exit 3; }
+
+node - "$trace" <<'NODE'
+const fs = require('node:fs');
+const events = fs.readFileSync(process.argv[2], 'utf8')
+  .trim().split('\n').filter(Boolean).map(JSON.parse);
+const counts = new Map();
+for (const event of events) counts.set(event.event, (counts.get(event.event) || 0) + 1);
+console.log(`Trace: ${events[0]?.trace_id ?? 'unknown'}`);
+console.log(`Events: ${events.length}`);
+for (const [event, count] of [...counts].sort(([a], [b]) => a.localeCompare(b))) {
+  console.log(`${event}: ${count}`);
+}
+NODE
