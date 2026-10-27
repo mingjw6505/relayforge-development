@@ -86,6 +86,22 @@ class SkillStructureTests(unittest.TestCase):
         self.assertRegex(router, r"Include `data` only for a\s+real persistence")
         self.assertRegex(router, r"use `integration` for a shared\s+contract")
 
+    def test_full_stack_backend_handoff_precedes_dependent_frontend_work(self):
+        router = (SKILLS / "task-router" / "SKILL.md").read_text(encoding="utf-8")
+        workflow = (SKILLS / "development-workflow" / "SKILL.md").read_text(encoding="utf-8")
+        handoff = (
+            SKILLS
+            / "development-workflow"
+            / "references"
+            / "backend-frontend-handoff.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("Mark the handoff as `full-stack` only when", router)
+        self.assertIn("automatically export a frontend handoff", workflow)
+        self.assertIn("before contract-dependent frontend", workflow)
+        self.assertIn(".relayforge/handoffs/<task-slug>/backend-to-frontend.md", handoff)
+        self.assertIn("Do not copy whole source files", handoff)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -30,7 +30,9 @@ the core router does not contain a framework or language table.
 Quick work stays in the current context. Standard work uses one primary writer
 and only needed specialist capabilities. Large/full-stack work coordinates
 surface ownership and dependencies, allowing at most two non-overlapping
-writers when parallelism is safe.
+writers when parallelism is safe. For dependent backend/frontend work, it
+automatically writes an ignored local handoff after backend completion so the
+frontend consumes the implemented contract instead of an assumption.
 
 After implementation, the plugin asks once which remaining actions to run:
 full test verification, code review, commit, and push. Actions already selected

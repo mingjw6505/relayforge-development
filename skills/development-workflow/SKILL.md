@@ -16,6 +16,7 @@ Start from the router handoff:
 - route: `Standard` or `Large`;
 - requested outcome and acceptance criteria;
 - work surfaces and their dependencies;
+- whether the router identified a frontend/backend `full-stack` dependency;
 - selected specialist capabilities;
 - repository rules and known risks; and
 - test, review, commit, or push actions the user already requested.
@@ -67,6 +68,25 @@ Update dependent workers when a shared contract changes. The Controller owns
 integration and reconciles all surface results before declaring implementation
 complete.
 
+### Backend-to-frontend handoff
+
+For a `full-stack` task, complete the backend surface and its minimal checks,
+then automatically export a frontend handoff before contract-dependent frontend
+implementation begins. This local process artifact does not require a separate
+user choice.
+
+Read and follow
+[the backend-to-frontend handoff contract](references/backend-frontend-handoff.md)
+only for these full-stack tasks. Write the artifact under the ignored
+`.relayforge/handoffs/<task-slug>/` workspace. The frontend owner must read it
+before consuming backend behavior, and the Controller must refresh it whenever
+the backend contract changes.
+
+Independent frontend groundwork may run earlier, but do not implement against
+an assumed backend contract. If the backend is blocked or its observable
+contract is not stable enough to hand off, keep dependent frontend work blocked
+and report the precise reason.
+
 ## Implementation completion
 
 Reach `implementation-complete` only when:
@@ -74,6 +94,8 @@ Reach `implementation-complete` only when:
 - the requested implementation exists or a precise blocker is known;
 - all changed paths have an in-scope reason;
 - available minimal checks have a recorded result; and
+- every full-stack backend/frontend dependency has a current handoff artifact
+  consumed by the frontend owner; and
 - unresolved risks and unavailable capabilities are explicit.
 
 Then load [finishing-development](../finishing-development/SKILL.md). Pass its

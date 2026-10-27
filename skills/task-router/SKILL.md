@@ -93,7 +93,9 @@ process.
 
 Pass the selected route, work surfaces, dependency notes, planned specialist
 skills, known risks, and any preselected post-development actions to the next
-workflow. For Standard and Large, `development-workflow` owns implementation.
+workflow. Mark the handoff as `full-stack` only when `frontend` and `backend`
+are both active surfaces with an implementation dependency between them. For
+Standard and Large, `development-workflow` owns implementation.
 After any route reaches implementation-complete, use
 [finishing-development](../finishing-development/SKILL.md).
 
