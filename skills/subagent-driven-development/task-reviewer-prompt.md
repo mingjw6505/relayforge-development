@@ -210,7 +210,7 @@ Subagent (general-purpose):
 - `[CAPABILITY_MAP_FILE]` — task capability map
 - `[REVIEW_REPORT_FILE]` — assigned review artifact
 - `[DIFF_FILE]` — REQUIRED: the path the controller wrote the review
-  package to (`bash scripts/review-package PLAN_FILE BASE WORKTREE OUTFILE PATHS_FILE` prints the unique
+  package to (`bash scripts/review-package PLAN_FILE BASE UNCOMMITTED OUTFILE PATHS_FILE` prints the unique
   path it wrote; the package never enters the controller's context)
 
 **Reviewer returns:** Spec Compliance verdict (✅/❌/⚠️), Strengths, Issues

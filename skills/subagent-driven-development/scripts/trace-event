@@ -57,7 +57,7 @@ for field in "$@"; do
     exit 2
   fi
   case "$key:$value" in
-    source:observed|source:declared|source:inferred|status:passed|status:failed|status:blocked|status:completed|status:worktree|status:committed|status:selected|status:loaded|mode:Quick|mode:Standard|mode:Large) ;;
+    source:observed|source:declared|source:inferred|status:passed|status:failed|status:blocked|status:completed|status:uncommitted|status:committed|status:selected|status:loaded|mode:Quick|mode:Standard|mode:Large) ;;
     task:*|round:*) [[ "$value" =~ ^[0-9]+$ ]] || { echo "trace field must be numeric: $key" >&2; exit 2; } ;;
     base:*) [[ "$value" =~ ^[a-fA-F0-9]{7,40}$ ]] || { echo "trace base must be a commit hash" >&2; exit 2; } ;;
     skill:*|pack:*|kind:*|role:*|agent_id:*|reason:*) [[ "$value" =~ ^[a-zA-Z0-9._:/-]+$ ]] || { echo "trace field must be an identifier: $key" >&2; exit 2; } ;;

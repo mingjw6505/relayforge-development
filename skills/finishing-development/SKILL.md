@@ -72,15 +72,18 @@ findings in the handoff.
 Run these only when the user selected them and all selected upstream gates are
 clear.
 
-- Commit only task-owned, reviewed paths; preserve unrelated worktree changes.
+- Commit only task-owned, reviewed paths; preserve unrelated checkout changes.
 - Follow repository branch, version, message, and immediate-approval rules.
 - Push only when a task commit exists and the remote and branch are clear.
+- Commit and push only the primary task branch, never a temporary worker
+  worktree or detached worker state.
 - Never create an implicit commit merely because push was selected.
 - A push failure does not roll back the local commit; report the recoverable
   state.
 
 Commit and push do not imply PR creation, remote CI, merge, release, or real
-deployment.
+deployment. Do not merge, delete the task branch, or switch back to its base
+branch unless the user explicitly requests that separate action.
 
 ## Final status
 

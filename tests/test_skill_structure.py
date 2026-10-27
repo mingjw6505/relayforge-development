@@ -102,6 +102,37 @@ class SkillStructureTests(unittest.TestCase):
         self.assertIn(".relayforge/handoffs/<task-slug>/backend-to-frontend.md", handoff)
         self.assertIn("Do not copy whole source files", handoff)
 
+    def test_task_branch_is_default_and_worktrees_require_true_parallelism(self):
+        workflow = (SKILLS / "development-workflow" / "SKILL.md").read_text(encoding="utf-8")
+        router = (SKILLS / "task-router" / "SKILL.md").read_text(encoding="utf-8")
+        branch_protocol = (
+            SKILLS
+            / "development-workflow"
+            / "references"
+            / "task-branch.md"
+        ).read_text(encoding="utf-8")
+        parallel_protocol = (
+            SKILLS
+            / "development-workflow"
+            / "references"
+            / "parallel-worktrees.md"
+        ).read_text(encoding="utf-8")
+        script = (
+            SKILLS
+            / "development-workflow"
+            / "scripts"
+            / "parallel_worktree.py"
+        ).read_text(encoding="utf-8")
+
+        standard = workflow.split("## Standard", 1)[1].split("## Large", 1)[0]
+        self.assertIn("do not create implementation agents, worktrees", standard)
+        self.assertIn("Never create a worktree for Quick work", router)
+        self.assertIn("Use one task branch as the normal isolation boundary", branch_protocol)
+        self.assertIn("handoff is sequential", parallel_protocol)
+        self.assertIn('["git", "worktree", "add", "--detach"', script)
+        self.assertIn('["git", "worktree", "remove", "--force"', script)
+        self.assertNotIn('"prune"', script)
+
 
 if __name__ == "__main__":
     unittest.main()

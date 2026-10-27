@@ -59,6 +59,12 @@ Work directly in the current context. Do not create a plan, dispatch an agent,
 or load a domain skill by default. Use a specialist only when the small change
 genuinely depends on non-obvious domain rules.
 
+Before a mutating Quick task, reuse the current branch only when it is already
+dedicated to the task. Otherwise create a task branch from a clean `HEAD` using
+the guarded branch setup in
+[the task-branch protocol](../development-workflow/references/task-branch.md).
+Never create a worktree for Quick work and never auto-stash unrelated changes.
+
 Batch the initial file inspection when practical. After editing, run one
 focused evidence check; do not repeat equivalent `diff`, status, or file-read
 commands once the requested result is already established.
@@ -95,7 +101,9 @@ Pass the selected route, work surfaces, dependency notes, planned specialist
 skills, known risks, and any preselected post-development actions to the next
 workflow. Mark the handoff as `full-stack` only when `frontend` and `backend`
 are both active surfaces with an implementation dependency between them. For
-Standard and Large, `development-workflow` owns implementation.
+Large work, identify potential parallel units only when they have no path or
+interface dependency; this is a candidate, not permission to create a
+worktree. For Standard and Large, `development-workflow` owns implementation.
 After any route reaches implementation-complete, use
 [finishing-development](../finishing-development/SKILL.md).
 

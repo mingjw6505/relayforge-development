@@ -39,7 +39,7 @@ Subagent (general-purpose):
     the fix delta; both snapshots use the same BASE. The current snapshot
     may add newly created task-owned files, which are part of the fix.
     For a final-review fix, the previous package is whole-branch context and
-    the current package is a fix-only WORKTREE diff against the last reviewed
+    the current package is a fix-only UNCOMMITTED diff against the last reviewed
     HEAD. Judge only the fix against the findings, not the entire branch.
     If either package is missing, tell the Controller; do not substitute an
     unscoped Git diff.
@@ -118,8 +118,8 @@ Subagent (general-purpose):
   previous review, copied verbatim, one per bullet
 - `[REPORT_FILE]` — the implementer's report file (fix reports appended)
 - `[CAPABILITY_MAP_FILE]` — task capability map
-- `[PREVIOUS_DIFF_FILE]` — previous worktree review package
-- `[DIFF_FILE]` — current worktree review package for the same BASE
+- `[PREVIOUS_DIFF_FILE]` — previous uncommitted-change review package
+- `[DIFF_FILE]` — current uncommitted-change review package for the same BASE
 - `[REVIEW_REPORT_FILE]` — assigned review artifact
 
 **Re-reviewer returns:** per-finding verdicts (ADDRESSED / NOT ADDRESSED),

@@ -11,8 +11,10 @@ Write implementation plans for an engineer who has not seen this codebase or thi
 
 **Announce at start:** "I'm using the writing-plans skill to create the implementation plan."
 
-**Context:** Record whether execution will use the current worktree or a safely
-isolated worktree. Worktree creation belongs to execution, not plan writing.
+**Context:** Record the base branch and intended task branch. Default to one
+primary checkout. Mark parallel candidates only when they can run at one base
+SHA with non-overlapping paths and no interface dependency; worktree creation
+belongs to execution, not plan writing.
 
 **Save Controller plans to:** the ignored RelayForge runtime workspace for
 this plan, not project documentation. Choose a stable path under

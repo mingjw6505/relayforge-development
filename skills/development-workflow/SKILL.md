@@ -17,6 +17,7 @@ Start from the router handoff:
 - requested outcome and acceptance criteria;
 - work surfaces and their dependencies;
 - whether the router identified a frontend/backend `full-stack` dependency;
+- current branch, `HEAD`, and checkout status;
 - selected specialist capabilities;
 - repository rules and known risks; and
 - test, review, commit, or push actions the user already requested.
@@ -27,6 +28,12 @@ persisted data, permissions, security, cost, or blast radius.
 
 ## Shared implementation rules
 
+- Use one primary task branch as the normal isolation boundary. Reuse the
+  current branch only when it is already dedicated to this task; otherwise
+  create a task branch from a clean current `HEAD` before editing. Do not
+  automatically stash, commit, reset, or carry unrelated changes. Read
+  [the task-branch protocol](references/task-branch.md) only when a transition
+  is needed.
 - Load each selected specialist only when its work surface becomes active.
 - Keep one writer per owned file set. Preserve unrelated user changes.
 - For an unknown failure, establish a reproducible symptom and root-cause
@@ -45,8 +52,8 @@ persisted data, permissions, security, cost, or blast radius.
 Use one primary implementation context. Reconstruct the affected behavior,
 select the needed capability, implement, and run the narrowest useful checks.
 A read-only advisor is justified only when it materially reduces uncertainty;
-do not create implementation agents, formal plans, or review packages by
-default.
+do not create implementation agents, worktrees, formal plans, or review
+packages by default.
 
 ## Large / full-stack
 
@@ -57,16 +64,24 @@ The main session is the Controller. Before editing, maintain a compact map of:
 - file or component ownership; and
 - the check that will prove each surface before integration.
 
-Use additional writers only when their deliverables and write scopes are truly
-independent. Never run more than two writers concurrently. Do not run two
-writers in the same worktree or on overlapping paths. Children receive only
-their scoped outcome, constraints, interfaces, owned paths, and expected
-checks; they do not receive the full conversation and may not spawn children.
+Default to one writer in the primary checkout and execute surfaces
+sequentially. A second writer is allowed only when two substantial units share
+the same stable base but have no path, contract, schema, migration, generated
+output, or runtime dependency. Read and follow
+[the parallel-worktree protocol](references/parallel-worktrees.md) only when
+this strict parallel case exists.
 
-When safe parallel writers are unavailable, execute surfaces sequentially.
-Update dependent workers when a shared contract changes. The Controller owns
-integration and reconciles all surface results before declaring implementation
-complete.
+Never run more than two writers concurrently. Parallel writers use separate,
+detached temporary worktrees outside the repository; the Controller does not
+edit while they run. Each child receives only its outcome, constraints,
+interfaces, owned paths, checkout path, and expected checks. Children may not
+spawn children or mutate Git state. Integrate validated patches one at a time
+into the primary task branch, then run cross-surface checks.
+
+When any parallel condition is absent, do not create a worktree; execute in the
+primary checkout. Update dependent workers when a shared contract changes. The
+Controller owns integration and reconciles all surface results before declaring
+implementation complete.
 
 ### Backend-to-frontend handoff
 
@@ -96,6 +111,8 @@ Reach `implementation-complete` only when:
 - available minimal checks have a recorded result; and
 - every full-stack backend/frontend dependency has a current handoff artifact
   consumed by the frontend owner; and
+- every temporary worker patch is integrated, while any retained worktree and
+  its recovery reason are explicit; and
 - unresolved risks and unavailable capabilities are explicit.
 
 Then load [finishing-development](../finishing-development/SKILL.md). Pass its

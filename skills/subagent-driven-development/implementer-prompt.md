@@ -53,8 +53,10 @@ Subagent (general-purpose):
     While iterating, run the focused test for what you're changing; run the
     full suite once before reporting, not after every edit.
 
-    Never run git add, commit, amend, branch, merge, or push. The Controller
-    owns all Git mutations after independent review and user confirmation.
+    Never run git add, commit, amend, branch, switch, checkout, worktree,
+    merge, rebase, or push. The Controller owns all Git mutations after
+    independent review and user confirmation. Work only in the checkout path
+    assigned to you.
 
     ## You Do Not Dispatch Subagents
 

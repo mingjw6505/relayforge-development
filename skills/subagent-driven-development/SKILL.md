@@ -12,10 +12,12 @@ the Controller.
 
 ## Setup
 
-Use an isolated worktree when the repository and host support one safely.
-Otherwise verify the current worktree, branch, and ownership of existing
-changes before editing. Do not start implementation on main/master without
-explicit user consent.
+Use one primary task branch. Verify the current branch, `HEAD`, checkout status,
+and ownership of existing changes before editing; do not automatically stash,
+commit, reset, or carry unrelated changes. Do not start implementation on
+main/master without explicit user consent. Read the task-branch rules in
+[development-workflow](../development-workflow/references/task-branch.md)
+when a branch transition is needed.
 Run `bash scripts/sdd-workspace PLAN_FILE` from this skill directory; it prints
 this plan's ignored artifact directory. Keep a `progress.md` ledger there with
 `# SDD ledger — plan: <plan path>` as its first line. On resume, trust the
@@ -61,14 +63,24 @@ event counts when investigating workflow cost or routing.
 
 ## Task loop
 
-Batch independent, same-shape edits when one brief and one review surface
-are clearer. Otherwise use one implementer per task. Never run two writers
-in the same worktree. Read-only advisors may run concurrently. Separate
-worktrees and non-overlapping ownership are prerequisites for parallel writers.
-Children are leaves; no child may spawn another child. The implementer cannot
-be its own independent reviewer.
+Batch independent, same-shape edits when one brief and one review surface is
+clearer. Otherwise use one implementer per task and run writers sequentially in
+the primary checkout. Only two substantial tasks with the same clean base,
+non-overlapping ownership, and no interface dependency may run concurrently;
+for that exception use the detached worktree and patch protocol in
+[development-workflow](../development-workflow/references/parallel-worktrees.md).
+Read-only advisors may run concurrently without worktrees. Children are leaves;
+no child may spawn another child. The implementer cannot be its own independent
+reviewer.
 
-1. Record `BASE=$(git rev-parse HEAD)` and the initial worktree status. If
+For the parallel exception, the Controller uses the protocol helper to export
+each worker's scoped patch instead of running the ordinary uncommitted package
+command in that worker checkout. Review each frozen patch before integration,
+integrate clean patches one at a time, then resume the normal checkpoint rules
+in the primary task branch. A worker never commits to make parallel integration
+possible.
+
+1. Record `BASE=$(git rev-parse HEAD)` and the initial checkout status. If
    task-owned paths already contain unrelated user edits, isolate them or ask
    before proceeding; do not package or stage them as task work. Run
    `bash scripts/task-brief PLAN_FILE N` to create the authoritative brief.
@@ -90,7 +102,7 @@ be its own independent reviewer.
    must not stage, commit, amend, branch, merge, or push.
 3. Freeze the review surface: list exactly the task-owned changed paths in
    `task-N-paths.txt`, one relative path per line. Run
-   `bash scripts/review-package PLAN_FILE BASE WORKTREE OUTFILE PATHS_FILE`
+   `bash scripts/review-package PLAN_FILE BASE UNCOMMITTED OUTFILE PATHS_FILE`
    to capture tracked, staged, and untracked changes without mutating Git.
    `HEAD` must still equal `BASE`; if it moved, reconcile before review.
    Write a reviewer capability map with `role_id: task-reviewer`, read-only
@@ -110,7 +122,7 @@ be its own independent reviewer.
    implementer. Each round appends covering test command and output to the
    worker report. Refresh `task-N-paths.txt` to include any newly created fix
    files and verify it still excludes unrelated user changes. Build a new
-   `WORKTREE` package with a distinct output path,
+   `UNCOMMITTED` package with a distinct output path,
    then write a `re-reviewer` capability map and run a scoped re-review
    using [re-review-prompt.md](re-review-prompt.md). Give the re-reviewer the
    previous package and new package so it can inspect only the fix delta.
@@ -146,7 +158,7 @@ capability map using
 `../requesting-code-review/code-reviewer.md`. Point it to ledgered deferred
 minors and parked findings. If final review finds defects, record
 `FIX_BASE=HEAD`, then dispatch one worker for the complete fix wave. Build
-`review-package PLAN_FILE FIX_BASE WORKTREE` with an explicit paths file and
+`review-package PLAN_FILE FIX_BASE UNCOMMITTED` with an explicit paths file and
 unique output path. The scoped re-review receives the final review findings,
 the original whole-branch package for context, and this fix-only package;
 it judges only the fix. This final-fix invocation uses the fix-only package,

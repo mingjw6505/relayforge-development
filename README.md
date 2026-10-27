@@ -13,6 +13,8 @@ Claude Code, ChatGPT, and compatible agent hosts.
 - `skills/` — reusable workflows, one directory per skill.
 - `skills/task-router/` — stack-neutral Quick/Standard/Large routing.
 - `skills/development-workflow/` — proportional Standard/Large implementation.
+- `skills/development-workflow/scripts/parallel_worktree.py` — guarded task
+  branches and exceptional parallel-worker worktrees.
 - `skills/finishing-development/` — one finishing choice for tests, review, commit, and push.
 - `hooks/hooks.json` — optional Codex lifecycle telemetry hook.
 - `scripts/workflow_logger.py` — metadata-only Hook event logger.
@@ -28,11 +30,14 @@ capability set from the repository and currently available Skill descriptions;
 the core router does not contain a framework or language table.
 
 Quick work stays in the current context. Standard work uses one primary writer
-and only needed specialist capabilities. Large/full-stack work coordinates
-surface ownership and dependencies, allowing at most two non-overlapping
-writers when parallelism is safe. For dependent backend/frontend work, it
-automatically writes an ignored local handoff after backend completion so the
-frontend consumes the implemented contract instead of an assumption.
+and only needed specialist capabilities. Every mutating route creates or reuses
+one task branch; sequential work uses the primary checkout. Large work may
+create at most two
+detached temporary worktrees only for substantial parallel writers with the
+same clean base, non-overlapping paths, and no interface dependency; otherwise
+it stays sequential. For dependent backend/frontend work, it automatically
+writes an ignored local handoff after backend completion so the frontend
+consumes the implemented contract instead of an assumption.
 
 After implementation, the plugin asks once which remaining actions to run:
 full test verification, code review, commit, and push. Actions already selected
