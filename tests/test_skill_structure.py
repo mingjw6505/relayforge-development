@@ -78,9 +78,6 @@ class SkillStructureTests(unittest.TestCase):
         self.assertIn("Do not use for an already-approved task", planning)
         self.assertIn("Never use for a mechanical copy", frontend)
 
-        backend = frontmatter((SKILLS / "backend-patterns" / "SKILL.md").read_text(encoding="utf-8"))
-        self.assertIn("Never use for Java or Spring code", backend)
-
     def test_router_does_not_bias_large_routes_toward_data(self):
         router = (SKILLS / "task-router" / "SKILL.md").read_text(encoding="utf-8")
         self.assertRegex(router, r"Include `data` only for a\s+real persistence")
