@@ -4,13 +4,14 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "skills" / "development-workflow" / "scripts" / "parallel_worktree.py"
-REVIEW_SCRIPT = ROOT / "skills" / "subagent-driven-development" / "scripts" / "review-package"
+REVIEW_SCRIPT = ROOT / "skills" / "finishing-development" / "scripts" / "review_package.py"
 
 
 class ParallelWorktreeTests(unittest.TestCase):
@@ -18,7 +19,7 @@ class ParallelWorktreeTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.base = Path(self.temporary.name)
-        self.repository = self.base / "project"
+        self.repository = self.base / "项目 with spaces"
         self.repository.mkdir()
         self.git("init", "-b", "main")
         self.git("config", "user.name", "RelayForge Test")
@@ -38,16 +39,18 @@ class ParallelWorktreeTests(unittest.TestCase):
             check=True,
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
 
     def helper(self, *arguments: str, check: bool = True) -> subprocess.CompletedProcess:
         return subprocess.run(
-            ["python3", str(SCRIPT), *arguments],
+            [sys.executable, str(SCRIPT), *arguments],
             cwd=self.repository,
             env=self.environment,
             check=check,
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
 
     def paths_file(self, name: str, *paths: str) -> Path:
@@ -216,7 +219,8 @@ class ParallelWorktreeTests(unittest.TestCase):
         self.assertIn("already changed worker-owned paths", integrated.stderr)
         self.assertEqual((self.repository / "alpha.txt").read_text(encoding="utf-8"), "controller result\n")
 
-    def test_review_package_uses_uncommitted_mode_name(self):
+    def test_review_package_captures_uncommitted_work_without_bash(self):
+        self.assertTrue(REVIEW_SCRIPT.is_file(), f"Missing review helper: {REVIEW_SCRIPT}")
         self.prepare_task_branch()
         base = self.git("rev-parse", "HEAD").stdout.strip()
         (self.repository / "alpha.txt").write_text("review me\n", encoding="utf-8")
@@ -226,18 +230,17 @@ class ParallelWorktreeTests(unittest.TestCase):
         output = self.base / "review.diff"
         completed = subprocess.run(
             [
-                "bash",
+                sys.executable,
                 str(REVIEW_SCRIPT),
-                str(plan),
-                base,
-                "UNCOMMITTED",
-                str(output),
-                str(self.paths_file("review", "alpha.txt")),
+                "--base", base,
+                "--output", str(output),
+                "--paths-file", str(self.paths_file("review", "alpha.txt")),
             ],
             cwd=self.repository,
             check=False,
             capture_output=True,
             text=True,
+            encoding="utf-8",
         )
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertIn("review me", output.read_text(encoding="utf-8"))

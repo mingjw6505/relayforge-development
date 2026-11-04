@@ -1,189 +1,180 @@
 #!/usr/bin/env python3
-"""Compare baseline and candidate workflow benchmark JSONL records."""
-
+"""Compare paired workflow runs with explicit outcome evidence and optional targets."""
 from __future__ import annotations
 
 import argparse
-import json
-import statistics
 from collections import defaultdict
+import json
+import math
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+import statistics
 
 
-TARGET_TOKEN_REDUCTION = 30.0
-TARGET_DURATION_REDUCTION = 25.0
-TARGET_AUTONOMY_RATE = 80.0
+PAIR_CONTEXT = ("task_id", "scenario", "snapshot", "model", "environment")
+BOOLEAN_FIELDS = ("acceptance_passed", "required_checks_passed", "review_required",
+                  "verification_selected", "verification_evidence", "review_selected", "review_evidence")
+COUNT_FIELDS = ("tokens", "regressions", "human_rework", "unresolved_critical_important")
 
 
-def read_records(path: Path) -> Tuple[List[Dict[str, Any]], int]:
-    records: List[Dict[str, Any]] = []
-    malformed = 0
+def count(value):
+    return type(value) is int and value >= 0
+
+
+def valid_record(record):
+    if not isinstance(record, dict) or record.get("variant") not in {"baseline", "candidate"}:
+        return False
+    duration = record.get("duration_ms")
+    if type(duration) not in (int, float) or not math.isfinite(duration) or duration < 0:
+        return False
+    if not count(record.get("human_decisions")):
+        return False
+    if not isinstance(record.get("scenario"), str) or not record["scenario"].strip():
+        return False
+    for field in ("pair_id", *PAIR_CONTEXT):
+        if field in record and (not isinstance(record[field], str) or not record[field].strip()):
+            return False
+    for field in BOOLEAN_FIELDS:
+        if field in record and type(record[field]) is not bool:
+            return False
+    for field in COUNT_FIELDS:
+        if field in record and record[field] is not None and not count(record[field]):
+            return False
+    return True
+
+
+def read_records(path):
+    records, malformed = [], 0
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
     except OSError:
         return records, 1
     for line in lines:
         try:
-            value = json.loads(line)
-        except json.JSONDecodeError:
+            record = json.loads(line)
+        except (ValueError, TypeError):
             malformed += 1
             continue
-        if isinstance(value, dict) and valid_record(value):
-            records.append(value)
+        if valid_record(record):
+            records.append(record)
         else:
             malformed += 1
     return records, malformed
 
 
-def non_negative_number(value: Any) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0
+def median(values):
+    values = list(values)
+    return round(float(statistics.median(values)), 2) if values else None
 
 
-def valid_record(record: Dict[str, Any]) -> bool:
-    if record.get("variant") not in {"baseline", "candidate"}:
-        return False
-    if not isinstance(record.get("scenario"), str) or not record["scenario"]:
-        return False
-    if not non_negative_number(record.get("duration_ms")):
-        return False
-    decisions = record.get("human_decisions")
-    if not isinstance(decisions, int) or isinstance(decisions, bool) or decisions < 0:
-        return False
-    tokens = record.get("tokens")
-    return tokens is None or (isinstance(tokens, int) and not isinstance(tokens, bool) and tokens >= 0)
-
-
-def median(values: Iterable[float]) -> Optional[float]:
-    samples = list(values)
-    return round(float(statistics.median(samples)), 2) if samples else None
-
-
-def percent_reduction(baseline: Optional[float], candidate: Optional[float]) -> Optional[float]:
-    if baseline is None or candidate is None or baseline == 0:
+def reduction(baseline, candidate):
+    if baseline is None or candidate is None or baseline <= 0:
         return None
-    return round((baseline - candidate) / baseline * 100, 2)
+    return (baseline - candidate) / baseline * 100
 
 
-def percent(value: int, total: int) -> Optional[float]:
-    return round(value / total * 100, 2) if total else None
+def outcome(record):
+    # A demonstrated failure dominates missing evidence. Absence is never a pass.
+    if any(record.get(f) is False for f in ("acceptance_passed", "required_checks_passed")):
+        return "failed"
+    if any((record.get(f) or 0) > 0 for f in ("regressions", "unresolved_critical_important")):
+        return "failed"
+    if any(record.get(f) is not True for f in ("acceptance_passed", "required_checks_passed")):
+        return "unknown"
+    if record.get("regressions") != 0 or "review_required" not in record:
+        return "unknown"
+    if record.get("verification_selected") and record.get("verification_evidence") is not True:
+        return "unknown"
+    if record["review_required"] or record.get("review_selected"):
+        if (record.get("review_evidence") is not True
+                or record.get("unresolved_critical_important") != 0):
+            return "unknown"
+    return "passed"
 
 
-def quality_summary(records: List[Dict[str, Any]]) -> Dict[str, Any]:
-    verification = [record for record in records if record.get("verification_selected") is True]
-    review = [record for record in records if record.get("review_selected") is True]
-    return {
-        "verification_selected": len(verification),
-        "verification_with_evidence": sum(
-            record.get("verification_evidence") is True for record in verification
-        ),
-        "review_selected": len(review),
-        "review_without_open_critical_or_important": sum(
-            isinstance(record.get("unresolved_critical_important"), int)
-            and record["unresolved_critical_important"] == 0
-            for record in review
-        ),
-        "review_with_open_critical_or_important": sum(
-            isinstance(record.get("unresolved_critical_important"), int)
-            and record["unresolved_critical_important"] > 0
-            for record in review
-        ),
-    }
-
-
-def variant_summary(records: List[Dict[str, Any]]) -> Dict[str, Any]:
-    token_samples = [record["tokens"] for record in records if isinstance(record.get("tokens"), int)]
-    by_scenario: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
-    for record in records:
-        by_scenario[record["scenario"]].append(record)
+def summarize(records):
+    states = [outcome(r) for r in records]
     return {
         "runs": len(records),
-        "median_duration_ms": median(record["duration_ms"] for record in records),
-        "median_tokens": median(token_samples),
-        "token_coverage": {"reported": len(token_samples), "runs": len(records)},
-        "no_midcourse_decision_rate_pct": percent(
-            sum(record["human_decisions"] == 0 for record in records), len(records)
-        ),
-        "quality": quality_summary(records),
-        "scenarios": {
-            scenario: {
-                "runs": len(samples),
-                "median_duration_ms": median(sample["duration_ms"] for sample in samples),
-                "median_tokens": median(
-                    sample["tokens"] for sample in samples if isinstance(sample.get("tokens"), int)
-                ),
-            }
-            for scenario, samples in sorted(by_scenario.items())
-        },
+        "outcomes": {state: states.count(state) for state in ("passed", "failed", "unknown")},
+        "median_duration_ms": median(r["duration_ms"] for r in records),
+        "median_tokens": median(r["tokens"] for r in records if r.get("tokens") is not None),
+        "token_coverage": sum(r.get("tokens") is not None for r in records),
+        "median_human_decisions": median(r["human_decisions"] for r in records),
+        "median_human_rework": median(r["human_rework"] for r in records if r.get("human_rework") is not None),
     }
 
 
-def analyze(records: List[Dict[str, Any]], malformed: int = 0) -> Dict[str, Any]:
-    grouped = {
-        variant: [record for record in records if record["variant"] == variant]
-        for variant in ("baseline", "candidate")
-    }
-    summaries = {variant: variant_summary(samples) for variant, samples in grouped.items()}
-    baseline = summaries["baseline"]
-    candidate = summaries["candidate"]
-    tokens_complete = all(
-        summary["runs"] > 0 and summary["token_coverage"]["reported"] == summary["runs"]
-        for summary in summaries.values()
-    )
-    token_reduction = (
-        percent_reduction(baseline["median_tokens"], candidate["median_tokens"])
-        if tokens_complete
-        else None
-    )
-    duration_reduction = percent_reduction(
-        baseline["median_duration_ms"], candidate["median_duration_ms"]
-    )
-    quality = candidate["quality"]
-    verification_ok = (
-        candidate["runs"] > 0
-        and quality["verification_selected"] == quality["verification_with_evidence"]
-    )
-    review_ok = (
-        candidate["runs"] > 0
-        and quality["review_selected"]
-        == quality["review_without_open_critical_or_important"]
-    )
-    autonomy = candidate["no_midcourse_decision_rate_pct"]
+def analyze(records, malformed=0, *, duration_target=None, token_target=None):
+    for target in (duration_target, token_target):
+        if target is not None and (type(target) not in (int, float) or not math.isfinite(target) or not 0 <= target <= 100):
+            raise ValueError("reduction targets must be finite percentages from 0 to 100")
+    valid = [r for r in records if valid_record(r)]
+    malformed += len(records) - len(valid)
+    groups = defaultdict(list)
+    excluded = []
+    for index, record in enumerate(valid):
+        if not all(record.get(field) for field in ("pair_id", *PAIR_CONTEXT)):
+            excluded.append({"record": index, "reason": "missing pair identity or comparable context"})
+        else:
+            groups[record["pair_id"]].append(record)
+    pairs = []
+    for pair_id, runs in sorted(groups.items()):
+        baseline = [r for r in runs if r["variant"] == "baseline"]
+        candidate = [r for r in runs if r["variant"] == "candidate"]
+        if len(baseline) != 1 or len(candidate) != 1:
+            excluded.append({"pair_id": pair_id, "reason": "requires exactly one run per variant"})
+            continue
+        b, c = baseline[0], candidate[0]
+        if any(b[f] != c[f] for f in PAIR_CONTEXT):
+            excluded.append({"pair_id": pair_id, "reason": "task, scenario, snapshot, model or environment mismatch"})
+            continue
+        pairs.append({"pair_id": pair_id, "scenario": b["scenario"],
+                      "baseline_outcome": outcome(b), "candidate_outcome": outcome(c),
+                      "duration_reduction_pct": reduction(b["duration_ms"], c["duration_ms"]),
+                      "token_reduction_pct": reduction(b.get("tokens"), c.get("tokens"))})
+    complete = bool(pairs) and not excluded and not malformed
+    states = [p[f] for p in pairs for f in ("baseline_outcome", "candidate_outcome")]
+    quality = False if "failed" in states else (True if complete and all(s == "passed" for s in states) else None)
+    duration_complete = complete and all(p["duration_reduction_pct"] is not None for p in pairs)
+    tokens_complete = complete and all(p["token_reduction_pct"] is not None for p in pairs)
+    duration = median(p["duration_reduction_pct"] for p in pairs) if duration_complete else None
+    tokens = median(p["token_reduction_pct"] for p in pairs) if tokens_complete else None
+    eligible = complete and quality is True
+    def meets(value, target):
+        return value >= target if eligible and value is not None and target is not None else None
     return {
-        "records": len(records),
-        "malformed_records": malformed,
-        "variants": summaries,
-        "comparison": {
-            "duration_reduction_pct": duration_reduction,
-            "token_reduction_pct": token_reduction,
-            "token_metric_complete": tokens_complete,
-        },
-        "targets": {
-            "duration_reduction_at_least_25_pct": (
-                duration_reduction is not None and duration_reduction >= TARGET_DURATION_REDUCTION
-            ),
-            "token_reduction_at_least_30_pct": (
-                None if token_reduction is None else token_reduction >= TARGET_TOKEN_REDUCTION
-            ),
-            "no_midcourse_decision_rate_at_least_80_pct": (
-                autonomy is not None and autonomy >= TARGET_AUTONOMY_RATE
-            ),
-            "selected_verification_has_evidence": verification_ok,
-            "selected_review_has_no_open_critical_or_important": review_ok,
-        },
+        "schema_version": 2, "records": len(valid), "malformed_records": malformed,
+        "variants": {v: summarize([r for r in valid if r["variant"] == v]) for v in ("baseline", "candidate")},
+        "pairing": {"complete": complete, "matched_pairs": len(pairs), "excluded": excluded},
+        "pairs": pairs,
+        "comparison": {"duration_reduction_pct": duration, "token_reduction_pct": tokens,
+                       "token_metric_complete": tokens_complete,
+                       "quality_preserved": quality, "cost_comparison_eligible": eligible},
+        "targets": {"duration_reduction_pct": duration_target, "token_reduction_pct": token_target,
+                    "duration_target_met": meets(duration, duration_target),
+                    "token_target_met": meets(tokens, token_target)},
         "limitations": [
-            "A null token target means one or more runs did not expose a reliable token metric.",
-            "Compare equivalent prompts with the same model tier and a similar execution environment.",
+            "Outcome fields require independently checked acceptance, regression and required-check evidence; declarations alone are not proof.",
+            "Pairs must share task/rubric, repository snapshot, exact model settings and environment; repeat with new pair IDs in isolated workspaces.",
+            "Reductions are medians of within-pair percentages, not pooled medians. All recorded pairs must be comparable before an overall claim.",
+            "Unknown evidence is not success. Include failed/interrupted attempts and rework in the task run; do not select only successful runs.",
+            "No default time/token target or autonomy target is imposed. Missing reliable tokens remain unavailable.",
         ],
     }
 
 
-def main() -> int:
+def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", required=True, type=Path, help="Benchmark JSONL input.")
-    arguments = parser.parse_args()
-    records, malformed = read_records(arguments.input)
-    print(json.dumps(analyze(records, malformed), indent=2, sort_keys=True))
+    parser.add_argument("--input", required=True, type=Path)
+    parser.add_argument("--duration-target", type=float)
+    parser.add_argument("--token-target", type=float)
+    args = parser.parse_args()
+    records, malformed = read_records(args.input)
+    try:
+        report = analyze(records, malformed, duration_target=args.duration_target, token_target=args.token_target)
+    except ValueError as error:
+        parser.error(str(error))
+    print(json.dumps(report, indent=2, sort_keys=True, allow_nan=False))
     return 0
 
 

@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "repository": "https://github.com/mattpocock/skills",
+      "commit": "4ae2317ddb22b046e26455e4f9c9b3aaaf62212d",
+      "license": "MIT",
+      "files": [
+        {
+          "upstream_path": "skills/engineering/codebase-design/DEEPENING.md",
+          "local_path": "skills/codebase-design/DEEPENING.md",
+          "git_blob_sha1": "cd94075cfd754d147555c5d747a16431ed4c7dd8"
+        },
+        {
+          "upstream_path": "skills/engineering/codebase-design/DESIGN-IT-TWICE.md",
+          "local_path": "skills/codebase-design/DESIGN-IT-TWICE.md",
+          "git_blob_sha1": "aebdc9f8c05b40d7832de38e2fd8380e1e5507ac"
+        },
+        {
+          "upstream_path": "skills/engineering/codebase-design/SKILL.md",
+          "local_path": "skills/codebase-design/SKILL.md",
+          "git_blob_sha1": "3f63c8146dd2604b419c929e9876b90c30d410e9"
+        },
+        {
+          "upstream_path": "skills/engineering/codebase-design/agents/openai.yaml",
+          "local_path": "skills/codebase-design/agents/openai.yaml",
+          "git_blob_sha1": "3180715edb37f6e96bec42f92f00169faa8886ef"
+        },
+        {
+          "upstream_path": "skills/engineering/domain-modeling/ADR-FORMAT.md",
+          "local_path": "skills/domain-modeling/ADR-FORMAT.md",
+          "git_blob_sha1": "d7e61f30a9fd8ca70d9ee68f019c2a9ebf2d13f7"
+        },
+        {
+          "upstream_path": "skills/engineering/domain-modeling/GLOSSARY-FORMAT.md",
+          "local_path": "skills/domain-modeling/GLOSSARY-FORMAT.md",
+          "git_blob_sha1": "9c0b4c7a2e8507c23cbb5e0baa66d81699321cc6"
+        },
+        {
+          "upstream_path": "skills/engineering/domain-modeling/SKILL.md",
+          "local_path": "skills/domain-modeling/SKILL.md",
+          "git_blob_sha1": "a4438c6879c517d1a08e2b5fbca049b632688dfe"
+        },
+        {
+          "upstream_path": "skills/engineering/domain-modeling/agents/openai.yaml",
+          "local_path": "skills/domain-modeling/agents/openai.yaml",
+          "git_blob_sha1": "7f1522d2f11506ee205275ab7c282aa52366ecf6"
+        },
+        {
+          "upstream_path": "skills/productivity/grilling/SKILL.md",
+          "local_path": "skills/grilling/SKILL.md",
+          "git_blob_sha1": "d2f09a18e6a6c65c55f1271ba08dfeaf06f0bed3"
+        },
+        {
+          "upstream_path": "skills/productivity/grilling/agents/openai.yaml",
+          "local_path": "skills/grilling/agents/openai.yaml",
+          "git_blob_sha1": "ddbdb96139c0c1dfe6bca698f39d0465674b8a39"
+        },
+        {
+          "upstream_path": "LICENSE",
+          "local_path": "third-party/mattpocock-LICENSE",
+          "git_blob_sha1": "f1dd2c09108dde1a5f56097cee8461b3ea834499"
+        }
+      ]
+    },
+    {
+      "repository": "https://github.com/obra/superpowers",
+      "commit": "22f0b463e7a5e579904dd6211a520321035526f7",
+      "license": "MIT",
+      "files": [
+        {
+          "upstream_path": "skills/requesting-code-review/code-reviewer.md",
+          "local_path": "skills/requesting-code-review/code-reviewer.md",
+          "git_blob_sha1": "6d358b5d7d450c83cacbe450b7dbd4e673b694ad"
+        },
+        {
+          "upstream_path": "LICENSE",
+          "local_path": "third-party/obra-LICENSE",
+          "git_blob_sha1": "abf0390320aa14406af7a520b9b0739fdda9bf08"
+        }
+      ]
+    }
+  ]
+}

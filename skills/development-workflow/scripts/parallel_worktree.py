@@ -38,6 +38,7 @@ def run(
         check=False,
         capture_output=True,
         text=text,
+        encoding="utf-8" if text else None,
         env=env,
     )
     if check and completed.returncode != 0:
@@ -423,6 +424,10 @@ def parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    # Git paths are UTF-8 even when the Windows process locale is not.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     try:
         arguments = parser().parse_args()
         arguments.handler(arguments)

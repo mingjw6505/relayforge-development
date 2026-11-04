@@ -8,7 +8,9 @@ clean current `HEAD` before editing.
 The repository must ignore `.relayforge/` before local workflow state is
 written. Resolve `scripts/parallel_worktree.py` relative to the
 `development-workflow` skill directory and run it from the target repository
-root. The bundled helper performs the guarded transition:
+root. The bundled helper performs the guarded transition. Discover the available Python
+interpreter: use `python3` or `python` on Unix, and `py -3` or `python` on Windows.
+The script does not require Bash; translate the line continuation to the host shell:
 
 ```bash
 python3 "$PARALLEL_WORKTREE_SCRIPT" prepare \

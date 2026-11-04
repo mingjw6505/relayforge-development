@@ -7,13 +7,16 @@ map identifies a real parallel candidate.
 Resolve `scripts/parallel_worktree.py` relative to the
 `development-workflow` skill directory, assign its absolute path to
 `PARALLEL_WORKTREE_SCRIPT`, and run every command below from the target
-repository root.
+repository root. Examples below use Bash syntax; in PowerShell use the discovered
+Python interpreter (`py -3` or `python`) and native variable/line-continuation
+syntax. The helper itself needs only Python and Git.
 
 ## Eligibility
 
 Create temporary worktrees only when every condition holds:
 
 - at least two substantial write tasks can run at the same recorded `HEAD`;
+- every prerequisite of both tasks is integrated and verified in that base;
 - their owned paths do not overlap;
 - neither consumes the other's contract, schema, migration, generated output,
   or runtime result;
@@ -25,6 +28,10 @@ Create temporary worktrees only when every condition holds:
 Otherwise run one writer at a time in the primary checkout. Read-only advisors
 and reviewers do not justify a worktree. A backend/frontend dependency that
 uses the backend-to-frontend handoff is sequential and therefore ineligible.
+An earlier dependency does not forbid parallelism forever: independent consumers
+can become eligible after its contract and implementation are verified in a clean
+checkpoint. If that prerequisite is only in the working tree, continue sequentially
+there. Never manufacture a checkpoint commit or stash to unlock this optimization.
 
 Never use more than two concurrent writers. During their work the Controller
 coordinates only; it does not edit source. Workers are leaves and may not run
@@ -67,6 +74,10 @@ python3 "$PARALLEL_WORKTREE_SCRIPT" integrate \
 Integrate one patch at a time. The helper refuses a moved `HEAD`, a changed
 worker patch, overlapping primary changes, or a patch that does not apply
 cleanly. Run the cross-surface checks after every patch is present.
+Mark a task integrated and unblock its consumers only after the patch and required
+checks are accepted. A failed integration keeps those consumers blocked. Recompute
+ready tasks after the batch; the next parallel batch needs another clean, verified
+base with no retained workers. Without one, continue sequentially.
 
 ## Cleanup and recovery
 

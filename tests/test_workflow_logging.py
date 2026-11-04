@@ -8,6 +8,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -28,6 +29,30 @@ ANALYZER = load_module("analyze_workflow_logs", "scripts/analyze_workflow_logs.p
 
 
 class WorkflowLoggingTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == "nt", "Windows sharing violation behavior")
+    def test_transient_lock_sharing_violation_does_not_drop_event(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            original_open = os.open
+            collided = False
+
+            def open_with_one_collision(path, *args, **kwargs):
+                nonlocal collided
+                if str(path).endswith(".workflow-log.lock") and not collided:
+                    collided = True
+                    raise PermissionError("lock deletion is still pending")
+                return original_open(path, *args, **kwargs)
+
+            with patch.object(LOGGER.os, "open", side_effect=open_with_one_collision):
+                LOGGER.handle_event(
+                    {"hook_event_name": "UserPromptSubmit", "session_id": "one"},
+                    root, datetime(2026, 10, 26, tzinfo=timezone.utc),
+                )
+            records = (root / "logs/events-2026-10-26.jsonl").read_text(encoding="utf-8").splitlines()
+            self.assertEqual(len(records), 1)
+            self.assertEqual(json.loads(records[0])["event"], "turn_started")
+            self.assertFalse((root / ".workflow-log.lock").exists())
+
     def test_tool_events_exclude_payload_and_calculate_duration(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

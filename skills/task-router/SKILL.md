@@ -1,128 +1,113 @@
 ---
 name: task-router
-description: Classify implementation work as Quick, Standard, or Large and select the smallest useful set of available capabilities. Use at the start of code, configuration, debugging, container, or cross-surface implementation; skip direct explanations and other requests that need no development workflow.
+description: Route implementation by requirement clarity, task size, dependencies, risk and cost. Combine specification, test-first work and delegation as needed; skip explanations and planning-only requests.
 ---
 
 # Task Router
 
-Choose the lightest reliable route before loading implementation guidance. The
-router coordinates capabilities; it does not contain framework-specific
-development rules.
+Choose the lightest reliable route. User instructions, repository rules and host
+permissions take precedence. A route does not authorize commit, push, deployment
+or other external/destructive actions.
 
-## Preserve authority
+## Inspect once, decide
 
-- User instructions and repository rules override plugin defaults.
-- Routing never grants permission for credentials, production data, permission
-  changes, destructive actions, real deployment, or irreversible external
-  effects. Analyze safely, then obtain any authorization the host requires.
-- Do not infer permission to commit, push, publish, or deploy from a route.
+Resolve from the request and affected code:
 
-## Discover the work
+- observable outcome, behavior to preserve and unresolved product decisions;
+- work surfaces, prerequisite contracts and shared ownership;
+- whether implementation fits one context or needs durable coordination;
+- risk, the cheapest meaningful evidence, exclusions and any stated budget.
 
-Identify only what changes routing decisions:
+Read local facts before asking. Ask only for consequential choices that remain
+unknown; continue independent work while dependent behavior waits. Diagnose
+technical uncertainty with a bounded reproduction/experiment. A prototype can
+settle a design question but is not production acceptance evidence. Once settled,
+continue authorized work without a routine plan/method/phase confirmation.
 
-1. the requested outcome and whether the cause is known;
-2. affected work surfaces, using generic labels such as `frontend`, `backend`,
-   `data`, `container`, `diagnosis`, `integration`, or `general`;
-3. contracts or ordering between those surfaces;
-4. risk, reversibility, and the cheapest check that could catch the main
-   regression; and
-5. test, review, commit, or push actions already requested by the user.
+Risk is separate from size: low for mechanical local edits, normal for business
+behavior, high for permissions, concurrency, transactions, migrations or costly
+irreversible failure. A small sensitive diff is not low risk. Read
+[acceptance and risk](../development-workflow/references/acceptance-and-risk.md)
+only for ambiguity, material boundaries or an effort-limit decision.
 
-Do not classify from framework names. Inspect the repository and the
-descriptions of currently available skills, then select the minimum relevant
-capability set. Load a capability only when entering the surface it owns. A new
-language or framework skill must be discoverable without editing this router.
-If no specialist exists, continue with general repository conventions unless
-the missing expertise makes a correct result unsafe; disclose the fallback.
-Treat every negative activation boundary in a skill description as a hard
-constraint. Do not load a skill for a task it explicitly excludes.
-The core development workflow already includes reproduce-before-fix root-cause
-work. Do not add a generic debugging skill merely because a bug's cause starts
-unknown; select one only when the failure needs techniques beyond that core
-flow.
+## Route and compose
 
-## Choose a route
+| Route | When | Execution |
+| --- | --- | --- |
+| Quick | Clear local low-risk change; known cause; no shared contract, data compatibility, security or deployment change; one focused check suffices | Work inline, then finish. No plan, agent or domain skill by default. |
+| Standard | Bounded work fits one implementation context; Quick does not apply | Use development-workflow with one writer. A small full-stack feature or high-risk one-line fix can be Standard. |
+| Large | Multiple contexts/sessions or several substantial outcomes require persistent dependency coordination | Use development-workflow with a durable plan; delegate only if worthwhile. |
 
-### Quick
+Do not size work from framework names, layer/file counts or missing product intent.
+Resolve the intent first. Choose methods independently:
 
-Use Quick only when all are true:
+- **SDD (specification-driven):** use agreed conversation/acceptance for small work;
+  persist decisions and dependencies for multi-session, deferred or handed-off work.
+  Planning-only requests go directly to writing-plans and stop with the plan.
+- **TDD:** prefer a failing behavior test then one implementation slice for business
+  rules, bug regressions and high-risk invariants. Mechanical edits need a focused
+  result check, not an invented unit test. Development-workflow owns the loop.
+- **Subagents:** stay inline unless bounded investigation, implementation or review
+  offers a clear benefit over dispatch/context/integration cost. Parallel writers
+  additionally need ready independent tasks and safe isolation.
 
-- the target and expected result are clear;
-- one local work surface is involved;
-- no unknown root cause must be diagnosed;
-- no cross-component contract, data compatibility, security boundary, or
-  deployment behavior changes; and
-- one cheap, focused check can catch the main regression.
+Using SDD or a child does not select `subagent-driven-development`. Its heavier
+per-task workflow is only for an explicit user choice after availability checks.
 
-Work directly in the current context. Do not create a plan, dispatch an agent,
-or load a domain skill by default. Use a specialist only when the small change
-genuinely depends on non-obvious domain rules.
+## Select capabilities lazily
 
-Before a mutating Quick task, reuse the current branch only when it is already
-dedicated to the task. Otherwise create a task branch from a clean `HEAD` using
-the guarded branch setup in
-[the task-branch protocol](../development-workflow/references/task-branch.md).
-Never create a worktree for Quick work and never auto-stash unrelated changes.
+Find candidates from available descriptions. Read the selected skill's actual
+instructions and required resources before invoking it; do not load every skill
+or its references at routing time. Reuse that inspection until its source changes.
+Respect negative activation boundaries and invocation policies. Select only
+specialists needed by the current task; new stacks must work without a router edit.
 
-Batch the initial file inspection when practical. After editing, run one
-focused evidence check; do not repeat equivalent `diff`, status, or file-read
-commands once the requested result is already established.
+Bundling optional dependencies adds no default phase. Routine clarification, local
+structural fixes and ordinary review stay in the core route; load a bundled
+dependency only for a selected workflow or its specifically requested capability.
 
-### Standard
+[Optional workflow requirements](references/optional-workflows.json) declares
+required resources for the architecture and per-task agent workflows.
+Check those resources when considering either workflow. Missing dependencies or
+incompatible mandatory side effects make it unavailable for this task. Disclose
+the limitation and use compatible core guidance where authorized; never claim an
+unavailable skill ran, install it implicitly, or modify upstream skills. If the
+user's required method cannot be honored, resolve that specific choice.
 
-Use Standard when any are true and Large does not apply:
+Ordinary reproduce-and-fix work is already built in. Add systematic debugging
+only when the problem needs more than that focused evidence loop.
 
-- the root cause is unknown;
-- several files or modules in one primary surface must change;
-- a specialist capability or several ordered steps are needed; or
-- integration risk is material but one writer can keep clear ownership.
+## Continue
 
-Load [development-workflow](../development-workflow/SKILL.md), then only the
-specialist skills selected from current availability.
+For Quick, reuse a branch dedicated to this task; otherwise follow
+[task-branch](../development-workflow/references/task-branch.md) before editing.
+Never auto-stash unrelated changes or create a Quick worktree. Batch nearby reads,
+make the change and run the focused check once. Existing tests unrelated to a
+mechanical edit need not run unless repository rules require them. Once this
+evidence establishes the result, do not add equivalent assertions/status reads.
 
-### Large
-
-Use Large when any are true:
-
-- two or more work surfaces have interface, data, or release dependencies;
-- multiple independently useful outputs need coordinated ownership and order;
-  or
-- integration risk is too broad for one context to hold the constraints
-  reliably.
-
-Load [development-workflow](../development-workflow/SKILL.md). Large means
-coordinated full-stack work, not automatically maximum agents or maximum
-process.
-
-## Route handoff
-
-Pass the selected route, work surfaces, dependency notes, planned specialist
-skills, known risks, and any preselected post-development actions to the next
-workflow. Mark the handoff as `full-stack` only when `frontend` and `backend`
-are both active surfaces with an implementation dependency between them. For
-Large work, identify potential parallel units only when they have no path or
-interface dependency; this is a candidate, not permission to create a
-worktree. For Standard and Large, `development-workflow` owns implementation.
-After any route reaches implementation-complete, use
+For Standard/Large, pass route, acceptance, unresolved decisions, surfaces,
+dependencies, selected skills, risk/checks, spec/test/delegation choice and existing
+authorization to [development-workflow](../development-workflow/SKILL.md). Keep it
+in context, not a new form. Mark `full-stack` only for an actual frontend/backend
+implementation dependency. Parallel candidates are not permission to dispatch.
+After implementation or a blocker, use
 [finishing-development](../finishing-development/SKILL.md).
 
-Keep the planned specialist list stable through the turn. If the response
-announces or loads a specialist as part of this route, include it in `Planned
-skills`; use `none` only when no specialist was selected. Do not silently drop
-a selected skill from the final metadata.
-
-When this router is used, include exactly one route metadata line in the final
-response:
+Keep communication proportional; do not make the user approve internal routing.
+When this router ran, include exactly one plain final metadata line:
 
 ```text
 Workflow route: Standard | Work surfaces: diagnosis | Planned skills: none
 ```
 
-Use `none` when no specialist skill is planned. `Planned skills` lists domain
-capabilities selected by this router, not the three core workflow skills. The
-line declares a plan; it is not proof that the host loaded those skills.
-Emit it as plain text with no trailing spaces or Markdown hard break.
-The example values are illustrative, not defaults. Include `data` only for a
-real persistence, schema, or query surface; use `integration` for a shared
-contract with no data-layer change.
+Values are illustrative. Surfaces are `frontend`, `backend`, `data`, `container`,
+`diagnosis`, `integration` or `general`; `full-stack` is a dependency marker,
+and tests are evidence, not separate work-surface labels. List selected domain skills,
+excluding core workflow skills; `none` means none selected. Preserve announced
+selections and explain later changes instead of silently dropping them. This line
+is a declared plan, not proof of skill loading. No trailing spaces/hard break.
+
+Before replying after an implementation route, including Quick, read and apply
+finishing-development using the evidence already collected. This closes the same
+task; it does not start another test/review cycle or approval question.

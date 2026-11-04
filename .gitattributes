@@ -1,0 +1,6 @@
+# Preserve pinned upstream text bytes on Windows and Unix checkouts.
+skills/codebase-design/** text eol=lf
+skills/domain-modeling/** text eol=lf
+skills/grilling/** text eol=lf
+skills/requesting-code-review/code-reviewer.md text eol=lf
+third-party/*-LICENSE text eol=lf

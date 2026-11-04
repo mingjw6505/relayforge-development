@@ -1,228 +1,95 @@
 ---
 name: writing-plans
-description: Create a durable implementation plan when the user explicitly asks for one, implementation will be deferred, or work must be handed across sessions or teams. Do not use for an already-approved task being implemented now; development-workflow owns its compact execution map.
+description: Persist agreed requirements and an implementation dependency plan for multi-session work, deferred execution, handoff or an explicit plan request. Skip formal plans for small tasks that fit the current conversation.
 ---
 
 # Writing Plans
 
-## Overview
+Write the decisions needed to implement and verify the outcome without replaying
+the conversation. Reuse an existing spec/plan. Small authorized tasks stay inline;
+multi-session work needs a durable plan even if implementation starts now. Announce
+use of this skill briefly in the conversation's language.
 
-Write implementation plans for an engineer who has not seen this codebase or this spec. Assume they write idiomatic code in the project's language once they know the exact interface and the exact test, and that they will make a reasonable choice wherever the plan leaves one open. What they cannot know is what you decided: which files, which names and signatures, which values from the spec, which tests prove each task. Document those. Give them the whole plan as bite-sized tasks. DRY. YAGNI. TDD. Controller-owned review and commit checkpoints.
+## Scope and storage
 
-**Announce at start:** "I'm using the writing-plans skill to create the implementation plan."
+Read affected code, tests and existing decisions. Separate agreed requirements
+from assumptions; ask only for consequential unresolved choices. A technical
+unknown needs a bounded investigation, not invented implementation details.
+Planning alone does not authorize implementation.
 
-**Context:** Record the base branch and intended task branch. Default to one
-primary checkout. Mark parallel candidates only when they can run at one base
-SHA with non-overlapping paths and no interface dependency; worktree creation
-belongs to execution, not plan writing.
+Store internal plans under ignored `.relayforge/plans/<task>.md`; verify the
+directory is ignored first. For a requested public deliverable use the project's
+documentation convention, otherwise `docs/relayforge/plans/YYYY-MM-DD-<task>.md`
+and make sure it is actually visible rather than ignored. Never expose internal
+briefs/ledgers merely because a public plan was requested.
 
-**Save Controller plans to:** the ignored RelayForge runtime workspace for
-this plan, not project documentation. Choose a stable path under
-`<repo-root>/.relayforge/plans/` and ensure it is ignored before writing.
-Project instructions or the user's explicit request can require a separate
-project-visible implementation plan; follow the project's documentation
-convention for that deliverable. If no project convention exists,
-use `docs/relayforge/plans/YYYY-MM-DD-<feature-name>.md` for a *visible*
-plan only. Task briefs, ledgers, reports, and commit packets remain internal.
+Use the conversation's language for prose; preserve literal paths, code, identifiers
+and specified values. A second spec document is unnecessary when this plan already
+contains the agreement. Do not copy an entire spec into every task.
 
-## Scope Check
+## Decompose for execution
 
-If the spec covers multiple independent subsystems, it should have been broken into sub-project specs during brainstorming. If it wasn't, suggest breaking this into separate plans — one per subsystem. Each plan should produce working, testable software on its own.
+- Prefer user-visible vertical slices with independently checkable outcomes.
+  Include required setup/configuration in the slice that needs it; do not split
+  into frontend/backend/data plans by default.
+- Each task should fit one focused context. Record prerequisite IDs, ownership,
+  consumed/produced contracts and checks. Ordering alone is not a dependency graph.
+  Shared contract work must be an explicit prerequisite.
+- Specify paths and interfaces that constrain another task. Leave ordinary local
+  implementation choices to repository conventions; include code only to resolve
+  real ambiguity. File length alone is not a reason to restructure.
+- Allow directly related, verifiable local structural fixes that support the
+  requested change. Larger cross-module or infrastructure refactors are separate
+  proposals; do not expand the plan unless required for correctness or authorized.
+- Default to one writer. Mark parallel candidates only when prerequisites can be
+  verified in one clean base, ownership is disjoint, no mutual contract/runtime
+  dependency remains, and the benefit exceeds coordination cost. Execution owns
+  worktrees; uncommitted prerequisites can support sequential work in the primary
+  checkout. Do not add checkpoint commits just to permit parallelism.
 
-## File Structure
+## Compact plan shape
 
-Before defining tasks, map out which files will be created or modified and what each one is responsible for. This is where decomposition decisions get locked in.
-
-- Design units with clear boundaries and well-defined interfaces. Each file should have one clear responsibility.
-- You reason best about code you can hold in context at once, and your edits are more reliable when files are focused. Prefer smaller, focused files over large ones that do too much.
-- Files that change together should live together. Split by responsibility, not by technical layer.
-- In existing codebases, follow established patterns. If the codebase uses large files, don't unilaterally restructure - but if a file you're modifying has grown unwieldy, including a split in the plan is reasonable.
-
-This structure informs the task decomposition. Each task should produce self-contained changes that make sense independently.
-
-## Task Right-Sizing
-
-A task is the smallest unit that carries its own test cycle and is worth a
-fresh reviewer's gate. When drawing task boundaries: fold setup,
-configuration, scaffolding, and documentation steps into the task whose
-deliverable needs them; split only where a reviewer could meaningfully
-reject one task while approving its neighbor. Each task ends with an
-independently testable deliverable.
-
-## Step Granularity
-
-**Each step is one action with a checkable result:**
-- "Write the failing test" - step
-- "Run it to make sure it fails" - step
-- "Implement the minimal code to make the test pass" - step
-- "Run the tests and make sure they pass" - step
-- "Controller reviews the exact change and prepares a commit packet" - step
-
-## Plan Language
-
-When the plan will be presented to the human partner for confirmation, write
-its explanatory prose in the language of the current conversation. In a
-Chinese-language conversation, write every non-fixed heading, description,
-task name, and step action in Chinese. Preserve only the fixed English labels
-required by the templates, such as `Implementation Plan`, `Goal`,
-`Architecture`, `Tech Stack`, `Spec`, `Global Constraints`, `Review Focus`,
-`Task`, `Files`, `Interfaces`, `Step`, `Run`, and `Expected`. Text after a
-fixed label is not fixed: for example, keep `Step 1:` but translate `Write the
-failing test`; translate optional headings such as `File Structure` and
-`Self-Review` unless another template requires those exact labels. Always
-preserve literal technical content such as code, commands, paths, identifiers,
-API names, error messages, and exact quoted spec text. An explicit language
-request from the human partner overrides the conversation-language default.
-
-## Plan Document Header
-
-**Every plan MUST start with this header:**
+Adapt this outline to the task. Omit irrelevant sections, retain requirements and
+dependencies. Fixed labels used by an explicitly selected legacy executor must
+follow that executor's parser; ordinary execution needs no rigid document schema.
 
 ```markdown
-# [Feature Name] Implementation Plan
+# [Feature] Implementation Plan
 
-> **For agentic workers:** Use relayforge:development-workflow to implement this plan. Use relayforge:subagent-driven-development only when the user explicitly selected its heavier per-task review workflow. Steps use checkbox (`- [ ]`) syntax for tracking.
+**Goal / acceptance:** [observable outcomes, preserved behavior, exclusions]
+**Spec:** [existing source or agreed requirements here; distinguish assumptions]
+**Approach:** [module ownership, contracts, relevant decisions and source pointers]
+**Execution:** [base/working snapshot, task branch, method and reason, authorization,
+stated budget if any, selected risks and verification]
 
-**Goal:** [One sentence describing what this builds]
+### Task 1: [Observable outcome]
+**Depends on:** [IDs or none]
+**Files / interfaces:** [owned paths, consumed and produced contracts]
+**Checks:** [criterion, public boundary, command and expected result]
+**State:** [pending / active / blocked / integrated; evidence pointer when done]
+- [ ] [Failing behavior test when appropriate, then minimal implementation]
+- [ ] [Run affected checks, integrate and record evidence]
 
-**Architecture:** [2-3 sentences about approach]
-
-**Tech Stack:** [Key technologies/libraries]
-
-**Spec:** [path to the spec/design doc this plan implements — the plan
-argues from the spec, so the spec travels with it; executors read both]
-
-## Global Constraints
-
-[The spec's project-wide requirements — version floors, dependency limits,
-naming and copy rules, platform requirements — one line each, with exact
-values copied verbatim from the spec. Every task's requirements implicitly
-include this section.]
-
-## Review Focus
-
-[The five input classes or failure modes the spec implies but no task's
-tests exercise that are most likely to bite a person using this software
-— one line each, naming the input or condition and the behavior a
-reasonable person would expect, most likely first. The spec is a vision
-document: it says what the software must do, not everything it will
-meet, and its silence on an input is not permission for that input to
-break the program. Write the list here, once, with the spec in front of
-you. Then, for each line, add the test that pins it to the task that
-owns the code, in that task's own step style.]
-
----
+### Remaining risks
+[Only material gaps, owning task, required evidence or unresolved decision]
 ```
 
-## Task Structure
+For business rules/regressions, plan one behavior test then implementation at a
+time. Expectations come from requirements/worked examples, not the implementation.
+For mechanical changes plan the edit and focused check. An unrelated environment
+failure is not an expected red test. No separate agent, review or commit packet is
+required per task; finishing owns the integrated review at the chosen risk level.
 
-````markdown
-### Task N: [Component Name]
+## Check once and hand off
 
-**Files:**
-- Create: `exact/path/to/file.py`
-- Modify: `exact/path/to/existing.py:123-145`
-- Test: `tests/exact/path/to/test.py`
+Self-check acceptance coverage, preserved behavior, compatible interfaces, valid
+acyclic prerequisites and evidence for selected risks. Fix concrete gaps and recheck
+affected sections. Do not generate a reviewer or another plan review for editorial
+changes. A plan should record decisions, not transcribe the implementation.
 
-**Interfaces:**
-- Consumes: [what this task uses from earlier tasks — exact signatures]
-- Produces: [what later tasks rely on — exact function names, parameter
-  and return types. A task's implementer sees only their own task; this
-  block is how they learn the names and types neighboring tasks use.]
-
-- [ ] **Step 1: Write the failing test**
-
-```python
-def test_specific_behavior():
-    result = function(input)
-    assert result == expected
-```
-
-- [ ] **Step 2: Run test to verify it fails**
-
-Run: `pytest tests/path/test.py::test_name -v`
-Expected: FAIL with "function not defined"
-
-- [ ] **Step 3: Implement `function(input: InputType) -> ResultType` in `exact/path/to/file.py`**
-
-One line on the approach when the signature and the test leave a choice
-(which library call, which data structure); a code block only for an
-algorithm they do not determine.
-
-- [ ] **Step 4: Run test to verify it passes**
-
-Run: `pytest tests/path/test.py::test_name -v`
-Expected: PASS
-
-- [ ] **Step 5: Controller review and commit packet**
-
-Controller checks the exact changed files and tests, drafts the message with
-`relayforge:caveman-commit`, and asks the user immediately before `git commit`.
-Only the Controller may stage and commit after approval. Until approval,
-record this checkpoint as pending and do not start dependent tasks.
-````
-
-## What a Step Contains
-
-A step is done when the implementer can write exactly one reasonable thing
-from it. That is the whole requirement: unambiguous, not complete. Each kind
-of step carries what makes it unambiguous and nothing more:
-
-- **A test step:** the test's name and its assertions, as code, with the
-  spec's exact values in them.
-- **A code step:** the exact signature (name, parameters, return type), the
-  file it lives in, and the specific values the spec pins. The implementer
-  writes the body. A body appears only for an algorithm the signature and
-  tests do not determine, or for exact copy the spec fixes.
-- **A verification step:** the command to run and the output that means it
-  passed.
-- **A reference to another task:** that task's Interfaces block says what
-  to use; the plan does not repeat that task's code.
-
-A plan is the set of decisions the implementer cannot make alone. A plan
-longer than the code it describes has written the code instead. Lines that
-decide nothing ("TBD", "handle edge cases", "add appropriate validation",
-"write tests for the above", a type or function no task defines) are the
-opposite failure, and the self-review catches both.
-
-## Self-Review
-
-After writing the complete plan, look at the spec with fresh eyes and check the plan against it. This is a checklist you run yourself — not a subagent dispatch.
-
-**1. Spec coverage:** Skim each section/requirement in the spec. Can you point to a task that implements it? List any gaps.
-
-**2. Step scan:** Every step must let the implementer write exactly one reasonable thing, and no step may carry more than that: a line that decides nothing is a gap, a function body the signature and tests already determine is a transcript. Fix both.
-
-**3. Type consistency:** Do the types, method signatures, and property names you used in later tasks match what you defined in earlier tasks? A function called `clearLayers()` in Task 3 but `clearFullLayers()` in Task 7 is a bug.
-
-**4. Review Focus:** For each input class or failure mode the spec implies, is there a task whose tests exercise it? The five uncovered ones most likely to bite a person go in the Review Focus section, and each line there gets its test added to the owning task. An empty section means you checked and found none, not that you skipped the check.
-
-**5. Proportion:** Compare the plan's length to the spec's. A plan several times longer than the spec it implements is a transcript of the program, not a plan. If code blocks are most of the document, replace bodies with signatures, test names and assertions, and check that each step is still unambiguous.
-
-If you find issues, fix them inline. No need to re-review — just fix and move on. If you find a spec requirement with no task, add the task.
-
-## Execution Handoff
-
-After saving and self-reviewing the plan, link its actual path for your human
-partner to read and obtain plan confirmation before implementation. Preserve
-an execution method the user already chose; do not ask again solely because the
-plan is complete. If no execution method was supplied, ask once.
-
-**When no execution method or classified mode has already been supplied:**
-
-**"Plan complete and saved to `<actual-plan-path>`. Please review the plan. Which execution approach would you prefer?**
-
-- **Subagent-driven** - A fresh subagent implements each task and a fresh reviewer checks it before the next one starts, then a whole-branch review at the end. Most thorough; costs a fresh context per task and per review.
-- **Native** - Use `development-workflow` with one primary implementation context and proportional checks. Cheapest and fastest; independent review remains a finishing choice.
-
-**For this plan I recommend <one of the two>, because <one sentence from the plan: how much the tasks depend on each other's interfaces, how many there are, what a shipped mistake would cost>. Does the plan capture what you want, and which approach should we use?"**
-
-**When an execution method or classified mode has already been supplied:**
-
-**"Plan complete and saved to `<actual-plan-path>`. Please review the plan. Does it capture what you want?"**
-
-**If Subagent-driven chosen or selected by the classified mode:**
-- **REQUIRED SUB-SKILL:** Use relayforge:subagent-driven-development
-
-**If Native chosen or selected by the classified mode:**
-- **REQUIRED SUB-SKILL:** Use relayforge:development-workflow
+Link the saved plan. If only planning was requested, stop. If execution is already
+authorized, continue through [development-workflow](../development-workflow/SKILL.md)
+without a method-selection or per-task approval question. A larger required product
+decision remains a real blocker. Use `subagent-driven-development` only when explicitly
+selected and preflighted through task-router's optional workflow requirements;
+ordinary bounded children are managed by development-workflow.

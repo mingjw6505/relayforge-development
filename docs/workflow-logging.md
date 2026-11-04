@@ -7,6 +7,53 @@ desktop plugins. A CLI build may not load bundled plugin Hooks even when it
 loads the plugin's Skills; use `/hooks` to verify this source is present before
 expecting files.
 
+## First-use check
+
+1. Install or refresh RelayForge and confirm the installed manifest is `0.1.9`.
+2. In Codex desktop, open **Settings > Hooks** or **Review hooks** in the
+   composer. In the CLI, use `/hooks`. Find the RelayForge source, review its
+   commands and trust it. Installation alone does not enable collection; an
+   updated bundled script can require a new trust review.
+3. Complete one ordinary task that uses a local tool. Confirm that a current
+   `events-YYYY-MM-DD.jsonl` exists and contains events from that session before
+   relying on the report. Missing logs mean collection is unverified, not zero
+   activity. No extra agent or model call is needed for collection.
+4. Keep the plugin version, host and model alongside an exported report when
+   comparing runs. Hook logs do not currently include the plugin version, and
+   cannot judge whether the delivered feature met your intent. When a task goes
+   wrong, retain a short note about the expected result, observed failure and
+   rework; there is no mandatory per-task feedback form.
+
+The host supplies `PLUGIN_DATA` to hook processes; an ordinary terminal may not
+have that environment variable. Use the actual plugin data directory rather
+than an empty `$env:PLUGIN_DATA`. On Windows, after the first task, this local
+search can help locate logs under the usual Codex home (or `CODEX_HOME` override):
+
+```powershell
+$codexDataRoot = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
+Get-ChildItem -LiteralPath $codexDataRoot -Filter 'events-*.jsonl' -File -Recurse -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime -Descending |
+    Select-Object -First 10 FullName, LastWriteTime
+```
+
+Select the RelayForge directory, not another plugin's files. A host using a
+different data root or an explicit logger override needs its actual path. Export
+a report from your local checkout, substituting that directory:
+
+```powershell
+$logDir = 'C:\path\to\relayforge-plugin-data\logs'
+py -3 'E:\my-project\relayforge-development\scripts\analyze_workflow_logs.py' --log-dir $logDir |
+    Set-Content -LiteralPath '.\relayforge-usage-report.json' -Encoding utf8
+```
+
+Keep the daily JSONL files if a later investigation needs the event sequence;
+the summary alone loses ordering. Collection is local and does not upload logs
+to GitHub or any analytics service. Archive a useful sample before the 30-day
+retention window expires. This adapter targets Codex; Claude Code collection has
+not been validated and must not be assumed active.
+
+See the current [official hook trust instructions](https://learn.chatgpt.com/docs/hooks#plugin-bundled-hooks).
+
 ## Stored Data
 
 The hook stores daily JSONL files in:

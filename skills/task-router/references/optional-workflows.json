@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "optional_workflows": {
+    "improve-codebase-architecture": {
+      "requires": [
+        "skills/codebase-design/SKILL.md",
+        "skills/grilling/SKILL.md",
+        "skills/domain-modeling/SKILL.md"
+      ],
+      "fallback": "Use core guidance for scoped architecture decisions; do not claim to run the upstream architecture survey."
+    },
+    "subagent-driven-development": {
+      "requires": [
+        "skills/requesting-code-review/code-reviewer.md"
+      ],
+      "fallback": "If its prerequisites are unavailable, use development-workflow for bounded delegation when authorized; do not claim the upstream per-task workflow ran."
+    }
+  }
+}

@@ -1,125 +1,115 @@
 ---
 name: development-workflow
-description: Execute Standard or Large implementation work after routing, with scoped context, clear ownership, proportional AI resources, and low-cost development checks. Do not use for Quick tasks or post-development test, review, commit, and push choices.
+description: Execute Standard or Large work with acceptance evidence, focused tests and bounded coordination. Use after routing; skip Quick tasks, planning-only requests and standalone reviews.
 ---
 
 # Development Workflow
 
-Implement the routed task while keeping context and coordination proportional.
-This skill ends at `implementation-complete`; it does not silently run the
-optional finishing actions.
+Default to one writer, the existing conversation and repository conventions.
+Reuse the router's acceptance, dependencies, risk, selected skills, budget and
+authorization. If invoked directly, infer these from the request and affected
+code instead of starting another routing conversation.
 
-## Input contract
+## Establish only missing context
 
-Start from the router handoff:
+Inspect the affected path, direct callers and adjacent tests. Record the observable
+outcome, behavior to preserve and cheapest useful checks. Capture a baseline when
+it separates pre-existing failures from regressions. Ask only for unresolved
+product, contract, data, security or significant-cost decisions; do independent
+work while those answers are pending. Reuse answers and valid evidence across phases.
 
-- route: `Standard` or `Large`;
-- requested outcome and acceptance criteria;
-- work surfaces and their dependencies;
-- whether the router identified a frontend/backend `full-stack` dependency;
-- current branch, `HEAD`, and checkout status;
-- selected specialist capabilities;
-- repository rules and known risks; and
-- test, review, commit, or push actions the user already requested.
+For multi-session/deferred work or handoff, use
+[writing-plans](../writing-plans/SKILL.md), even when implementation starts now.
+Reuse existing plans; small tasks remain inline. Continue already-authorized
+execution without a new plan approval. Read
+[acceptance and risk](references/acceptance-and-risk.md) for material boundaries,
+ambiguous acceptance or an effort-limit decision, not for every mechanical edit.
 
-Resolve context from the repository before asking the user to repeat it. Ask
-only when a missing choice would change product behavior, public contracts,
-persisted data, permissions, security, cost, or blast radius.
+Use a branch already dedicated to the task or follow
+[task-branch](references/task-branch.md) before editing. Preserve unrelated changes;
+never automatically stash, commit, reset or carry them to another branch.
 
-## Shared implementation rules
+## Implement and check
 
-- Use one primary task branch as the normal isolation boundary. Reuse the
-  current branch only when it is already dedicated to this task; otherwise
-  create a task branch from a clean current `HEAD` before editing. Do not
-  automatically stash, commit, reset, or carry unrelated changes. Read
-  [the task-branch protocol](references/task-branch.md) only when a transition
-  is needed.
-- Load each selected specialist only when its work surface becomes active.
-- Keep one writer per owned file set. Preserve unrelated user changes.
-- For an unknown failure, establish a reproducible symptom and root-cause
-  evidence before changing code.
-- Make the smallest coherent changes that satisfy the current outcome. Avoid
-  unrelated cleanup.
-- Development may run compilation, type checks, and targeted tests that directly
-  guide the implementation. Record them as `Minimal checks`, never as complete
-  `Test verification`.
-- When a check fails, fix an in-scope regression. Preserve evidence for
-  unrelated, pre-existing, environmental, or permission-blocked failures.
-- Do not repeat the same failing action without new evidence.
+- For unknown failures, obtain reproduction/root-cause evidence before a production
+  fix. Use a bounded experiment when a reliable trigger is not yet available.
+- For business rules, regressions and high-risk invariants, prefer one behavior
+  test at a public boundary, observe the expected failure, then implement enough
+  to pass. Repeat by vertical slice. Use expectations from requirements or known
+  examples, not the implementation's formula; avoid private-structure tests and
+  writing all tests before any implementation.
+- Characterize legacy behavior that must survive without preserving a known bug.
+  An unrelated import/environment failure is not a regression proof. If a red test
+  cannot be obtained, record the alternative evidence and gap. Mechanical prose,
+  styling and equivalent edits need a focused result check instead of a new unit test.
+- Use a compatible installed TDD skill if available; otherwise perform this loop
+  directly. Choose boundaries from existing contracts; no routine confirmation
+  is needed when the product behavior is settled.
+- Run relevant compilation/type checks and focused tests as they inform the work.
+  Record command, result and relevant inputs. A new phase or reviewer is not a
+  reason to rerun unchanged checks; finishing runs only missing/invalidated checks.
+- After two fixes without progress, reassess. Share a three-round review/fix limit
+  per unresolved issue across children and phases; respect a user budget earlier.
+  At a limit preserve evidence and report the next useful action. Do not reduce
+  required checks, invent passes or reset the count by spawning another child.
 
-## Standard
+## Local improvement boundary
 
-Use one primary implementation context. Reconstruct the affected behavior,
-select the needed capability, implement, and run the narrowest useful checks.
-A read-only advisor is justified only when it materially reduces uncertainty;
-do not create implementation agents, worktrees, formal plans, or review
-packages by default.
+Fix directly related structural problems when they simplify this change and can
+be verified: remove duplicated logic being touched, clarify state ownership, or
+isolate a concrete dependency needed by the task. Keep established public behavior
+and contracts unless their change is part of the requirement. Inspect the final
+diff for scope growth. Do not turn style preferences into automatic rewrite loops.
 
-## Large / full-stack
+Cross-module reorganization, infrastructure replacement or a larger architectural
+change is a separate proposal with its reason and likely scope. Continue the
+requested work if it can be delivered correctly without that refactor; ask for a
+decision only if the larger change actually blocks a correct result. File size
+alone does not justify a split. New shared state/side effects warrant a brief check
+of ownership, failure/retry behavior and affected callers before implementation.
 
-The main session is the Controller. Before editing, maintain a compact map of:
+## Delegate only for a concrete benefit
 
-- each work surface and user-visible outcome;
-- dependency and integration order;
-- file or component ownership; and
-- the check that will prove each surface before integration.
+A bounded advisor or fresh implementation child can reduce uncertainty/context
+pressure. Give it outcome, acceptance, owned paths, source pointers, constraints
+and checks. The Controller stops writing when a child owns the primary checkout.
+Children are leaves, cannot mutate Git state, and return changes, evidence and
+blockers. Validate their results. If tools/policy forbid delegation, work inline
+and expose any required independent-review gap. Using a child does not require
+the separate `subagent-driven-development` workflow.
 
-Default to one writer in the primary checkout and execute surfaces
-sequentially. A second writer is allowed only when two substantial units share
-the same stable base but have no path, contract, schema, migration, generated
-output, or runtime dependency. Read and follow
-[the parallel-worktree protocol](references/parallel-worktrees.md) only when
-this strict parallel case exists.
+For coordinated work, maintain task IDs, prerequisites, ownership, checks and
+states (`pending`, `active`, `blocked`, `integrated`) in the plan or existing
+context. Detect missing/cyclic prerequisites before dispatch. A task is ready
+only when its prerequisites are integrated and required checks passed, not when
+a child merely says DONE. Recompute readiness after integration; continue
+independent ready work if another branch is blocked and scope/budget allow.
 
-Never run more than two writers concurrently. Parallel writers use separate,
-detached temporary worktrees outside the repository; the Controller does not
-edit while they run. Each child receives only its outcome, constraints,
-interfaces, owned paths, checkout path, and expected checks. Children may not
-spawn children or mutate Git state. Integrate validated patches one at a time
-into the primary task branch, then run cross-surface checks.
+Read [parallel-worktrees](references/parallel-worktrees.md) only if two substantial
+ready tasks have no mutual path/contract/runtime dependency and dispatch plus
+integration costs plausibly less than the expected benefit. Maximum two writers;
+Controller coordinates without editing. The protocol owns isolation, frozen
+patches, integration and cleanup. Its clean base must contain verified prerequisites.
+If a prerequisite is only uncommitted, continue sequentially in that checkout;
+do not manufacture a commit/stash to enable parallelism. Stop affected consumers
+when shared contracts change, refresh inputs, then reschedule.
 
-When any parallel condition is absent, do not create a worktree; execute in the
-primary checkout. Update dependent workers when a shared contract changes. The
-Controller owns integration and reconciles all surface results before declaring
-implementation complete.
+For dependent frontend/backend work, implement vertical slices and follow
+[backend-to-frontend handoff](references/backend-frontend-handoff.md): verify the
+backend contract before dependent frontend work, then check the integrated slice.
+Small same-owner/context slices keep evidence inline; persist it when ownership
+or context changes or execution is deferred. Independent groundwork may proceed.
 
-### Backend-to-frontend handoff
+## Continue through completion
 
-For a `full-stack` task, complete the backend surface and its minimal checks,
-then automatically export a frontend handoff before contract-dependent frontend
-implementation begins. This local process artifact does not require a separate
-user choice.
+Before compaction/handoff, save only decisions, task state, source/revision or
+working-snapshot pointers, evidence and open findings. On resume check the actual
+checkout before redispatching completed work. Do not automatically clear context
+or pass the whole conversation to every child.
 
-Read and follow
-[the backend-to-frontend handoff contract](references/backend-frontend-handoff.md)
-only for these full-stack tasks. Write the artifact under the ignored
-`.relayforge/handoffs/<task-slug>/` workspace. The frontend owner must read it
-before consuming backend behavior, and the Controller must refresh it whenever
-the backend contract changes.
-
-Independent frontend groundwork may run earlier, but do not implement against
-an assumed backend contract. If the backend is blocked or its observable
-contract is not stable enough to hand off, keep dependent frontend work blocked
-and report the precise reason.
-
-## Implementation completion
-
-Reach `implementation-complete` only when:
-
-- the requested implementation exists or a precise blocker is known;
-- all changed paths have an in-scope reason;
-- available minimal checks have a recorded result; and
-- every full-stack backend/frontend dependency has a current handoff artifact
-  consumed by the frontend owner; and
-- every temporary worker patch is integrated, while any retained worktree and
-  its recovery reason are explicit; and
-- unresolved risks and unavailable capabilities are explicit.
-
-Then load [finishing-development](../finishing-development/SKILL.md). Pass its
-status inputs and the user's preselected finishing actions. Do not claim full
-verification or independent review at this boundary.
-
-An action the user did not mention is unresolved, not skipped. When any of test
-verification, code review, commit, or push remains unresolved, stop after
-implementation-complete and let `finishing-development` ask its single combined
-question. Do not choose an answer on the user's behalf.
+Implementation is complete when the requested changes exist in the primary
+checkout, paths are in scope, acceptance maps to evidence or explicit gaps,
+dependent frontend work consumed the current contract, and worker integration/
+recovery state is known. An unmet implementation requirement remains blocked.
+Pass results and gaps to [finishing-development](../finishing-development/SKILL.md)
+automatically; do not ask which routine finishing steps to perform.

@@ -79,7 +79,11 @@ def directory_lock(root: Path) -> Iterator[None]:
     while descriptor is None:
         try:
             descriptor = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-        except FileExistsError:
+        except (FileExistsError, PermissionError) as error:
+            # Windows can report a sharing violation while a previous owner is
+            # closing/deleting the lock. Retry within the same bounded deadline.
+            if isinstance(error, PermissionError) and os.name != "nt":
+                raise
             try:
                 age = time.time() - lock_path.stat().st_mtime
                 if age > STALE_LOCK_SECONDS:

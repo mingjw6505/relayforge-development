@@ -1,107 +1,80 @@
 ---
 name: finishing-development
-description: Finish an implementation by offering one combined choice for full test verification, code review, commit, and push, then report each action's status accurately. Use only after implementation-complete or when the user explicitly requests one of these finishing actions.
+description: Reconcile acceptance and risk-proportional verification, review the actual changes and perform only authorized commit/push actions. Use after implementation or when these finishing actions are requested.
 ---
 
 # Finishing Development
 
-Keep implementation, verification, review, commit, and push as separate states.
-The user controls the four finishing actions without having to approve ordinary
-development edits step by step.
+Use existing acceptance, risk, baseline and authorization. Finish required checks
+without another questionnaire. Honor exclusions and report resulting gaps.
 
-## Inputs
+## Evidence and review
 
-Collect:
+Map required outcomes to the integrated result, not the sum of child reports.
+Reuse a passed check while its relevant source, dependencies and configuration
+are unchanged. Run missing/invalidated checks; full suites only when repository
+rules or blast radius require them. Preserve unrelated baseline failures separately.
+Unavailable credentials, required external mutation or an exceeded budget leaves
+a gap requiring the relevant decision, not a fabricated pass.
 
-- implementation result and changed paths;
-- minimal checks and known gaps;
-- route, work surfaces, repository rules, and relevant risks; and
-- any finishing actions already selected in the user's request.
+| Change | Default review |
+| --- | --- |
+| Low-risk mechanical edit | Focused result check; code review may be skipped |
+| Ordinary behavior change | Controller inspects requirements conformance and engineering quality |
+| High-risk invariant or explicit independent-review requirement | One bounded independent reviewer when available; provide existing evidence, do not have it rerun suites without a concrete doubt |
 
-## One selection point
+If independence is unavailable, label self-review and the gap. A missing required
+independent review blocks selected commit/push until resolved or explicitly accepted.
+Material findings block publication; minor preferences do not trigger rewrite loops.
+Fix in-scope defects and recheck affected evidence. Review only the fix delta and
+newly affected contracts. Share development-workflow's three-round limit per issue;
+two attempts without progress require reassessment, and user budgets take precedence.
 
-Silence is not a selection. Treat each action as `selected`, `declined`, or
-`unresolved`; never turn “not requested” into `skipped` on the user's behalf.
-If the user already selected or declined all four actions, do not ask again.
-Otherwise stop and ask once which unresolved actions to run:
+Cover the actual task result: committed, staged, unstaged and task-owned untracked
+files, including deletions/renames. Compare with the starting revision and existing
+change baseline, exclude unrelated work and identify mixed ownership before staging.
+Record revision and content/hashes; later relevant changes invalidate the affected
+review. Missing starting evidence limits attribution and must be disclosed.
 
-- test verification;
-- code review;
-- commit;
-- push; or
-- skip all remaining actions.
+Read [review surface](references/review-surface.md) only when a reviewer needs a
+portable frozen diff, Git states are mixed, or the upstream `code-review` skill is
+being considered. Direct inspection is enough for ordinary local work. The upstream
+skill's HEAD-only diff cannot prove coverage of uncommitted work; do not commit or
+edit an upstream skill merely to make its review work. Use a disclosed direct
+review fallback when its inputs, prerequisites or delegation policy do not fit.
 
-Explain in the same prompt that push requires an existing task commit or a
-simultaneous commit choice. You may recommend tests and review, but never select
-them for the user. A repository, host, or organization may still impose a
-stricter authorization immediately before an external mutation.
+## Authorized publication
 
-This question is the handoff for the current turn. Do not continue into any
-unselected action and do not emit a final workflow-status line until every
-action is resolved by the user. A non-interactive host may return the question
-as its final answer and resume from the user's next message.
+Reuse existing authorization. If commit/push were not requested, finish with them
+skipped; do not ask a finishing-choice question. For an authorized commit, stage
+only task-owned changes and check them against the reviewed snapshot, following
+repository version/message rules. Required gates must pass or an allowable gap
+must be explicitly accepted. Preserve unrelated changes.
 
-Execute selected actions in this order:
+Push needs its own authorization, an existing task commit and a clear destination.
+A push-only request does not authorize a new commit. Neither action authorizes a
+merge, release, deployment, branch deletion or switching branches. Preserve and
+report the local commit if a push fails.
 
-```text
-test verification → code review → commit → push
-```
+## Report proportionally
 
-## Test verification
+State outcome, verification scope, material gaps and review independence. For a
+substantial task include the method choice and any measured cost/limit; a Quick
+task needs no process essay. `passed` means the agreed risk-proportional scope
+passed, not every possible test. Declined required checks stay skipped/partial.
 
-Use repository-native commands that cover the changed surfaces. Report exact
-commands, results, unrun checks, and coverage gaps. `unavailable` and `partial`
-are valid evidence states. A selected verification that fails blocks selected
-commit and push unless the user explicitly accepts the reported risk.
-
-## Code review
-
-Use an implementation-independent reviewer when available. Give it the user
-outcome, acceptance criteria, final diff, and verification evidence—not the
-implementer's conclusion. If independence is unavailable, label the review
-non-independent.
-
-Classify findings as `Critical`, `Important`, or `Minor`. Automatically fix and
-re-review Critical and Important findings for at most three rounds. Stop early
-when a fix needs new product scope, permission, or an unsafe assumption. Open
-Critical or Important findings block selected commit and push. Disclose Minor
-findings in the handoff.
-
-## Commit and push
-
-Run these only when the user selected them and all selected upstream gates are
-clear.
-
-- Commit only task-owned, reviewed paths; preserve unrelated checkout changes.
-- Follow repository branch, version, message, and immediate-approval rules.
-- Push only when a task commit exists and the remote and branch are clear.
-- Commit and push only the primary task branch, never a temporary worker
-  worktree or detached worker state.
-- Never create an implicit commit merely because push was selected.
-- A push failure does not roll back the local commit; report the recoverable
-  state.
-
-Commit and push do not imply PR creation, remote CI, merge, release, or real
-deployment. Do not merge, delete the task branch, or switch back to its base
-branch unless the user explicitly requests that separate action.
-
-## Final status
-
-Only after all four choices are resolved, report a concise human summary and
-finish with exactly one workflow-status metadata line:
+Use the existing declared-status vocabulary:
 
 ```text
-Workflow status: Implementation=complete | Minimal checks=passed | Test verification=skipped | Code review=skipped | Commit=skipped | Push=skipped
+Workflow status: Implementation=complete | Minimal checks=passed | Test verification=passed | Code review=skipped | Commit=skipped | Push=skipped
 ```
 
-Allowed values:
+Allowed values: Implementation `complete|blocked`; Minimal checks
+`passed|failed|partial|unavailable`; Test verification
+`passed|failed|partial|skipped|unavailable`; Code review
+`passed|findings-open|skipped|unavailable`; Commit/Push
+`completed|skipped|blocked|unavailable`.
 
-- `Implementation`: `complete`, `blocked`
-- `Minimal checks`: `passed`, `failed`, `partial`, `unavailable`
-- `Test verification`: `passed`, `failed`, `partial`, `skipped`, `unavailable`
-- `Code review`: `passed`, `findings-open`, `skipped`, `unavailable`
-- `Commit` and `Push`: `completed`, `skipped`, `blocked`, `unavailable`
-
-If tests or review were skipped, say plainly: `实现完成，未验证` and/or
-`实现完成，未审查`. Never turn a skipped or unavailable gate into a completion
-claim.
+Label a passed non-independent review explicitly in prose. Missing required
+independence is `unavailable`. If a required gate is missing, say `实现完成，未验证`
+or `实现完成，未审查` as applicable. Never describe blocked implementation as complete.
