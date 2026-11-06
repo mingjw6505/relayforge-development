@@ -15,6 +15,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterator, Optional
+from uuid import UUID
 
 
 RETENTION_DAYS = 30
@@ -23,6 +24,35 @@ LOCK_TIMEOUT_SECONDS = 2.0
 STALE_LOCK_SECONDS = 15.0
 LOG_PREFIX = "events-"
 STATE_FILE = "workflow-log-state.json"
+MAX_WORKFLOW_BYTES = 16 * 1024
+WORKFLOW_COMMON = {"event", "workflow_event_schema_version", "event_id", "task_run_id",
+                   "sequence", "route_policy_version"}
+WORKFLOW_FIELDS = {
+    "route_selected": {"execution_mode", "route", "risk", "reason_code", "planned_skills"},
+    "route_changed": {"from", "to", "reason_code"},
+    "verification_summary": {"implementation", "minimal_checks", "test_verification",
+                             "code_review", "commit", "push"},
+    "handoff_generated": {"form", "development_status", "code_availability"},
+    "workflow_completed": {"implementation", "development_status"},
+}
+WORKFLOW_ENUMS = {
+    "implementation": {"complete", "blocked"},
+    "minimal_checks": {"passed", "failed", "partial", "unavailable"},
+    "test_verification": {"passed", "failed", "partial", "skipped", "unavailable"},
+    "code_review": {"passed", "findings-open", "skipped", "unavailable"},
+    "commit": {"completed", "skipped", "blocked", "unavailable"},
+    "push": {"completed", "skipped", "blocked", "unavailable"},
+    "form": {"file", "inline"},
+    "development_status": {"ready_for_testing", "ready_with_issues", "blocked"},
+    "code_availability": {"available", "local_only", "unavailable", "unknown"},
+}
+ROUTES = {"L1": "quick", "L2": "standard", "L3": "large"}
+TRANSITION_REASONS = {
+    ("L1", "L2"): {"design_required", "contract_changed"},
+    ("L2", "L3"): {"coordination_required"},
+    ("L3", "L2"): {"coordination_unnecessary"},
+    ("L2", "L1"): {"scope_simplified"},
+}
 ROUTE_LINE_PATTERN = re.compile(
     r"^Workflow route: (Quick|Standard|Large) \| Work surfaces: "
     r"([a-z0-9-]+(?:, [a-z0-9-]+)*|none) \| Planned skills: "
@@ -330,10 +360,99 @@ def read_input() -> Dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def validate_workflow_event(value: Any) -> Dict[str, Any]:
+    """Validate only bounded, enumerated declarations; never include input in errors."""
+    def reject():
+        raise ValueError("invalid workflow event")
+
+    if not isinstance(value, dict):
+        reject()
+    kind = value.get("event")
+    if not isinstance(kind, str) or kind not in WORKFLOW_FIELDS:
+        reject()
+    if set(value) != WORKFLOW_COMMON | WORKFLOW_FIELDS[kind]:
+        reject()
+    if (type(value["workflow_event_schema_version"]) is not int
+            or value["workflow_event_schema_version"] != 1
+            or value["route_policy_version"] != "v2.1"
+            or type(value["sequence"]) is not int or value["sequence"] < 1):
+        reject()
+    for field in ("event_id", "task_run_id"):
+        try:
+            if not isinstance(value[field], str) or str(UUID(value[field])) != value[field]:
+                reject()
+        except (ValueError, AttributeError, TypeError):
+            reject()
+    for field, allowed in WORKFLOW_ENUMS.items():
+        if field in value and (not isinstance(value[field], str) or value[field] not in allowed):
+            reject()
+    if kind == "route_selected":
+        mode = value["execution_mode"]
+        if (not isinstance(mode, str) or mode not in ROUTES or value["route"] != ROUTES[mode]
+                or value["risk"] not in ("low", "medium", "high")
+                or value["reason_code"] != {"L1": "local_scope", "L2": "bounded_sdd",
+                                          "L3": "coordination_required"}[mode]):
+            reject()
+        skills = value["planned_skills"]
+        if (not isinstance(skills, list) or len(skills) > 64
+                or any(not isinstance(s, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", s)
+                       for s in skills)):
+            reject()
+    if kind == "route_changed":
+        before, after = value["from"], value["to"]
+        if (not isinstance(before, str) or not isinstance(after, str)
+                or not isinstance(value["reason_code"], str)
+                or value["reason_code"] not in TRANSITION_REASONS.get((before, after), ())):
+            reject()
+    if kind == "handoff_generated":
+        if value["development_status"] != "blocked" and value["code_availability"] != "available":
+            reject()
+    if kind == "workflow_completed":
+        if value["implementation"] == "blocked" and value["development_status"] != "blocked":
+            reject()
+    if len(json.dumps(value, ensure_ascii=False).encode("utf-8")) > MAX_WORKFLOW_BYTES:
+        reject()
+    return dict(value)
+
+
+def record_workflow_event(value: Any, root: Path) -> None:
+    record = validate_workflow_event(value)  # Reject before creating any files.
+    now = utc_now()
+    record.update(schema_version=SCHEMA_VERSION, source="agent_declared", timestamp=iso_timestamp(now))
+    with directory_lock(root):
+        append_record(root, record, now)
+
+
+def read_workflow_input() -> Dict[str, Any]:
+    raw = sys.stdin.buffer.read(MAX_WORKFLOW_BYTES + 1)
+    if len(raw) > MAX_WORKFLOW_BYTES:
+        raise ValueError("workflow event too large")
+
+    def unique_object(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise ValueError("duplicate workflow field")
+            result[key] = value
+        return result
+
+    return json.loads(raw.decode("utf-8"), object_pairs_hook=unique_object)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-dir", help="Override PLUGIN_DATA for local testing.")
+    parser.add_argument("--record-workflow-event", action="store_true",
+                        help="Read one bounded metadata declaration from stdin.")
     arguments = parser.parse_args()
+
+    if arguments.record_workflow_event:
+        try:
+            record_workflow_event(read_workflow_input(), data_directory(arguments.data_dir))
+        except (OSError, TimeoutError, ValueError, RecursionError):
+            print("workflow event not recorded", file=sys.stderr)
+            return 2
+        return 0
 
     try:
         needs_json_acknowledgement = handle_event(read_input(), data_directory(arguments.data_dir))

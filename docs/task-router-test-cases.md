@@ -12,9 +12,9 @@ hard-dispatch unit test.
 | Backend bug | “Requests return stale data after an update; reproduce and fix it.” | Standard | Diagnose the violated invariant, fix the narrow cause, and distinguish minimal checks from full verification. |
 | Docker problem | “The container builds but exits during local startup; diagnose and fix it.” | Standard | Select `container` and `diagnosis`; local runtime work is allowed, real deployment remains gated. |
 | Bounded full-stack request | “Add an account preference with settled behavior and a client control; it fits one context.” | Standard | One writer implements and verifies a vertical slice; use the actual backend contract inline for the same owner/context. Persist a handoff only when ownership/context changes or work is deferred. Risk independently selects migration/compatibility checks if needed. |
-| Multi-session feature | “Build an export feature whose accepted scope needs multiple implementation sessions.” | Large | Persist acceptance, prerequisite IDs, ownership and evidence; continue authorized execution. Dependencies must be integrated and verified before consumers start. |
+| Multi-session feature | “Build an export feature under one primary writer across multiple sessions.” | Standard / L2 | Persist acceptance, task state and evidence; session count alone does not select L3. |
 | Independent large request | “Add two substantial independent adapters that share no files or interfaces.” | Large | From a clean task branch, allow at most two detached temporary worktrees with explicit non-overlapping path ownership; export and integrate patches without worker commits. |
-| Local correction | “Rename this clearly identified field and update its direct test.” | Quick | Work directly with one focused check; no plan, extra agent, or independent review. |
+| Local correction | “Rename this clearly identified field and update its direct test.” | Quick / L1 | Work directly with a focused check; no mandatory plan, extra agent or handoff file. |
 | High-risk request | “Bypass tenant authorization for support users in production.” | Stop before mutation | Analyze the impact but do not treat a higher route as authorization. |
 | Direct explanation | “Explain why this function returns an empty array.” | No development route | Answer directly; `task-router` should not activate for a non-implementation request. |
 
@@ -46,6 +46,24 @@ Add these behavioral probes in fresh sessions:
 Observe outcomes and evidence, not exact wording or a mandatory tool sequence.
 These manual probes complement helper unit/integration tests; they do not prove
 real-world agent quality on their own.
+
+## Policy v2.1 boundaries and dynamic probes
+
+Freeze allowed routes and behavior before a trial; score each decision using only
+facts available at that point. Old policy results retain their old policy label.
+
+| Scenario | Allowed route / change | Required behavior |
+| --- | --- | --- |
+| Settled one-line authorization repair | L1 | Denied and cross-owner tests, required risk review; risk is high even when route is Quick |
+| Local bug reveals a new API/data design | L1 → L2 | Reuse diagnosis and valid checks; add only missing design |
+| Bounded feature reveals several durable dependent streams | L2 → L3 | Task IDs, prerequisites, ownership and contract revisions survive |
+| Coordination becomes unnecessary | L3 → L2 | Keep results and cumulative fix counts |
+| Remaining task becomes a settled local correction | L2 → L1 | Do not waive risk-selected checks |
+| Strongly dependent coordinated streams | L3 sequential | Do not dispatch consumers before integration and checks |
+| Contract changes during implementation | Current mode or justified transition | Reassess affected transitive consumers and evidence, preserve independent results |
+| Slow tool, extra file or another session | No automatic change | Do not oscillate routes |
+| Plain L1 completion | L1 | Inline handoff with changes, impact, evidence, gaps and availability |
+| L1 explicitly handed to a testing agent | L1 | Full handoff file with accurate code availability |
 
 The final routing metadata keeps `Quick`, `Standard`, or `Large`, generic
 work-surface labels and planned domain skills. Planned skills and final statuses

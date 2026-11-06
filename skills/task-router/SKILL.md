@@ -9,6 +9,10 @@ Choose the lightest reliable route. User instructions, repository rules and host
 permissions take precedence. A route does not authorize commit, push, deployment
 or other external/destructive actions.
 
+The primary agent is the single coordinator. This is a recommended entrypoint,
+not a hard dispatcher: hosts may select a skill directly. That skill fills missing
+context without restarting routing or creating a second coordinator.
+
 ## Inspect once, decide
 
 Resolve from the request and affected code:
@@ -24,9 +28,10 @@ technical uncertainty with a bounded reproduction/experiment. A prototype can
 settle a design question but is not production acceptance evidence. Once settled,
 continue authorized work without a routine plan/method/phase confirmation.
 
-Risk is separate from size: low for mechanical local edits, normal for business
+Risk is separate from size: low for mechanical local edits, medium for business
 behavior, high for permissions, concurrency, transactions, migrations or costly
-irreversible failure. A small sensitive diff is not low risk. Read
+irreversible failure. Read legacy normal as medium. A small sensitive diff is not
+low risk, but can still be Quick when its contract and fix are settled. Read
 [acceptance and risk](../development-workflow/references/acceptance-and-risk.md)
 only for ambiguity, material boundaries or an effort-limit decision.
 
@@ -34,12 +39,16 @@ only for ambiguity, material boundaries or an effort-limit decision.
 
 | Route | When | Execution |
 | --- | --- | --- |
-| Quick | Clear local low-risk change; known cause; no shared contract, data compatibility, security or deployment change; one focused check suffices | Work inline, then finish. No plan, agent or domain skill by default. |
-| Standard | Bounded work fits one implementation context; Quick does not apply | Use development-workflow with one writer. A small full-stack feature or high-risk one-line fix can be Standard. |
-| Large | Multiple contexts/sessions or several substantial outcomes require persistent dependency coordination | Use development-workflow with a durable plan; delegate only if worthwhile. |
+| Quick / L1 | Clear local change, known cause and settled behavior; no additional design or durable dependency coordination needed | Work inline, then finish with risk-selected checks. No mandatory plan, agent, worktree or handoff file. |
+| Standard / L2 | Needs minimal specification/design; one primary writer can manage it, including across sessions | Use development-workflow; persist only necessary decisions and tasks. |
+| Large / L3 | Substantial tasks or contexts need persistent contract, ownership and dependency coordination | Use development-workflow with a durable plan; delegation and parallelism remain optional. |
 
 Do not size work from framework names, layer/file counts or missing product intent.
 Resolve the intent first. Choose methods independently:
+
+A high-risk local fix can be L1 with its required tests and review. A single-writer
+multi-session feature can be L2. Multiple stacks do not imply multiple agents.
+Unsettled product intent is a decision gap, not a reason to increase route size.
 
 - **SDD (specification-driven):** use agreed conversation/acceptance for small work;
   persist decisions and dependencies for multi-session, deferred or handed-off work.
@@ -53,6 +62,20 @@ Resolve the intent first. Choose methods independently:
 
 Using SDD or a child does not select `subagent-driven-development`. Its heavier
 per-task workflow is only for an explicit user choice after availability checks.
+
+## Adjust when facts change
+
+Escalate L1 to L2 for newly needed design/contracts or linked scope; L2 to L3 for
+durable coordination. De-escalate L3 to L2 when coordination is no longer useful,
+or L2 to L1 when only a settled local edit remains. Strong dependencies may require
+sequential L3, not a downgrade. Slow tools, file counts and session boundaries
+alone do not change the route.
+
+Before affected dispatch, record the reason, new mode and invalidated consumers.
+Reuse analysis, work, valid evidence, task IDs, authorization and cumulative fix
+counts. Stop affected consumers after contract changes; preserve independent work.
+Read [route adjustments](references/route-adjustments.md) for durable recovery or
+event emission. Do not load the full development engine just to execute L1.
 
 ## Select capabilities lazily
 
@@ -107,6 +130,10 @@ and tests are evidence, not separate work-surface labels. List selected domain s
 excluding core workflow skills; `none` means none selected. Preserve announced
 selections and explain later changes instead of silently dropping them. This line
 is a declared plan, not proof of skill loading. No trailing spaces/hard break.
+
+Keep Quick/Standard/Large in this legacy line; use execution_mode L1/L2/L3 and
+route_policy_version v2.1 in structured decisions. The final line describes the
+current route, not a history of intermediate changes.
 
 Before replying after an implementation route, including Quick, read and apply
 finishing-development using the evidence already collected. This closes the same

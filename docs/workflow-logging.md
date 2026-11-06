@@ -127,6 +127,84 @@ candidate token, duration, human-decision, and quality targets. Benchmark
 records are separate from Hook logs because a Hook-observed turn does not prove
 that human input was materially required.
 
+## Workflow declarations v1
+
+The existing logger also accepts --record-workflow-event. With this flag, stdin
+must contain one JSON object of at most 16 KiB; without it the Hook protocol is
+unchanged. Use an already configured data destination, or an isolated --data-dir
+for local testing. This mode does not enable/trust hooks or add a background service.
+Resolve the script from the plugin root rather than from the target project.
+
+Common required fields are event, workflow_event_schema_version=1, event_id,
+task_run_id, sequence, and route_policy_version="v2.1". Both IDs are canonical
+lowercase UUIDs. sequence is a positive integer across all declarations in one
+task run, retained with event IDs in the existing plan/checkpoint. A resumed run
+keeps its run ID. Initial route_selected uses sequence 1.
+
+| Event | Additional required fields |
+| --- | --- |
+| route_selected | execution_mode (L1/L2/L3), route (quick/standard/large, matching mode), risk (low/medium/high), reason_code, planned_skills (normalized skill slugs) |
+| route_changed | from, to, reason_code |
+| verification_summary | implementation, minimal_checks, test_verification, code_review, commit, push, using existing final-status enums |
+| handoff_generated | form (file/inline), development_status, code_availability |
+| workflow_completed | implementation and development_status; this means run ended, including blocked |
+
+Initial reason codes are local_scope for L1, bounded_sdd for L2 and
+coordination_required for L3. Changes are adjacent only: L1→L2 uses design_required
+or contract_changed; L2→L3 uses coordination_required; L3→L2 uses
+coordination_unnecessary; L2→L1 uses scope_simplified. Mode and task state differ.
+Read historical normal risk as medium; emit only medium in new declarations.
+
+development_status is ready_for_testing, ready_with_issues or blocked.
+code_availability is available, local_only, unavailable or unknown. A non-blocked
+handoff needs available code; blocked implementation cannot declare a non-blocked
+completion. These checks reject contradictory enums, but cannot verify the truth
+of an agent's declaration.
+
+Example stdin, using fresh IDs in real runs:
+
+~~~json
+{
+  "event": "route_selected",
+  "workflow_event_schema_version": 1,
+  "event_id": "77777777-7777-4777-8777-777777777777",
+  "task_run_id": "11111111-1111-4111-8111-111111111111",
+  "sequence": 1,
+  "route_policy_version": "v2.1",
+  "execution_mode": "L1",
+  "route": "quick",
+  "risk": "high",
+  "reason_code": "local_scope",
+  "planned_skills": []
+}
+~~~
+
+Feed the JSON from a file or structured stdin to:
+
+~~~text
+python scripts/workflow_logger.py --record-workflow-event --data-dir <isolated-log-root>
+~~~
+
+The logger sets source=agent_declared, a UTC reception timestamp and the existing
+schema_version=1 envelope. Unknown fields, duplicate JSON keys, free-text reasons,
+wrong types/enums and oversized input are rejected before writing. Rejection
+returns code 2 and a generic message without echoing the payload. A telemetry
+failure does not block development; retain decisions in context/plan and disclose
+partial/unavailable collection. The default Hook mode retains its non-blocking exit.
+
+The workflow_decisions report is separate from legacy routing and workflow_status.
+It deduplicates event_id using business fields, excluding reception timestamps;
+conflicting IDs/sequences, missing selections, gaps, discontinuities and events
+after completion make history partial. Final routes are reported only for intact
+histories; observed transition counts do not prove a partial run's full history.
+An open history can be intact but not ended. Legacy final route lines are never
+added to the new task count. Missing events are not inferred.
+
+Actual agent counts use existing observed Subagent lifecycle events only where
+available. Planned skills are not actual loads; overlapping writers or tokens
+are not inferred from intentions. No raw prompt, code, patch, tool output,
+environment value or credentials belong in this interface.
+
 ## Support Boundaries
 
 The Hook uses `commandWindows` with `py -3` for Windows and `python3` for

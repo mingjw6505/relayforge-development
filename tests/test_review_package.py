@@ -180,6 +180,15 @@ class ReviewPackageTests(unittest.TestCase):
         self.assertTrue(result.stderr.startswith("review-package:"), result.stderr)
         self.assertFalse(output.exists())
 
+    def test_output_in_ignored_workflow_directory_is_supported(self):
+        (self.repo / "working.txt").write_text("snapshot inside ignored state\n")
+        before = (self.repo / ".git/index").read_bytes()
+        result, output = self.package(["working.txt"], name="审查 with spaces/.relayforge/review.diff")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(output.exists())
+        self.assertIn("snapshot inside ignored state", output.read_text())
+        self.assertEqual(before, (self.repo / ".git/index").read_bytes())
+
 
 if __name__ == "__main__":
     unittest.main()

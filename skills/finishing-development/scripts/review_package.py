@@ -13,8 +13,11 @@ import tempfile
 
 
 def git(root: Path, *args: str, env=None) -> bytes:
+    # check-ignore consumes literal filesystem paths, not pathspec magic.
+    # --literal-pathspecs makes Git reject even an ordinary ignored output path.
+    options = [] if args and args[0] == "check-ignore" else ["--literal-pathspecs"]
     result = subprocess.run(
-        ["git", "--literal-pathspecs", *args], cwd=root, env=env,
+        ["git", *options, *args], cwd=root, env=env,
         capture_output=True, check=False,
     )
     if result.returncode:

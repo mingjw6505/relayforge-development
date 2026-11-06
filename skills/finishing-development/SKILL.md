@@ -36,6 +36,18 @@ change baseline, exclude unrelated work and identify mixed ownership before stag
 Record revision and content/hashes; later relevant changes invalidate the affected
 review. Missing starting evidence limits attribution and must be disclosed.
 
+Bind each check to command/method, result, scope, evidence pointer and the actual
+code inputs: commit for committed results, or base/HEAD plus scoped content hashes
+or a frozen package for working changes. Same HEAD does not prove unchanged code.
+Include relevant dependency/configuration identifiers. Use existing review_package
+or direct file fingerprints, not a new snapshot engine. A hash identifies content;
+it does not make that content accessible to a testing agent.
+
+Keep generated handoffs/logs outside the code snapshot unless they are themselves
+delivered artifacts; record those separately to avoid self-referential hashes.
+Verification statuses are passed/failed/not_run/skipped/unavailable; give a reason
+for skipped or unavailable checks and do not convert missing evidence into success.
+
 Read [review surface](references/review-surface.md) only when a reviewer needs a
 portable frozen diff, Git states are mixed, or the upstream `code-review` skill is
 being considered. Direct inspection is enough for ordinary local work. The upstream
@@ -57,6 +69,17 @@ merge, release, deployment, branch deletion or switching branches. Preserve and
 report the local commit if a push fails.
 
 ## Report proportionally
+
+After reconciling the integrated result, use
+[delivery-handoff](../delivery-handoff/SKILL.md). Pass actual changed files,
+direct/indirect impact with evidence or Unknown, upstream acceptance mapping,
+test suggestions, executed verification, environment, Git/snapshot references and
+known gaps. Do not rerun checks merely to fill the handoff.
+
+L2/L3 and an explicitly requested testing handoff need a full file. Other L1 work
+uses inline changes, impact, verification, gaps and code availability. Missing
+required implementation or critical gates cannot be hidden as ready_with_issues.
+Implementation completion and downstream code availability are separate facts.
 
 State outcome, verification scope, material gaps and review independence. For a
 substantial task include the method choice and any measured cost/limit; a Quick

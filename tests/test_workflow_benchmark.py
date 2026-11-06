@@ -22,6 +22,45 @@ def pair(identity="one", **candidate_changes):
 
 
 class WorkflowBenchmarkTests(unittest.TestCase):
+    def test_policy_scoped_route_metrics_and_unknown_coverage(self):
+        records = pair()
+        records[1].update(plugin_version="0.1.9", route_policy_version="v2.1",
+                         route_decisions=[
+                             dict(rubric_id="local", allowed_routes=["L1"], actual_route="L1"),
+                             dict(rubric_id="bounded", allowed_routes=["L1", "L2"], actual_route="L3"),
+                             dict(rubric_id="coordinated", allowed_routes=["L3"], actual_route="L1"),
+                             dict(rubric_id="missing", allowed_routes=["L2"], actual_route=None),
+                         ])
+        metrics = BENCHMARK.analyze(records)["workflow_metrics"]["candidate"]
+        self.assertEqual(metrics["routing"]["v2.1"]["scored"], 3)
+        self.assertEqual(metrics["routing"]["v2.1"]["accuracy"], 1 / 3)
+        self.assertEqual(metrics["routing"]["v2.1"]["coverage"], 0.75)
+        self.assertEqual(metrics["routing"]["v2.1"]["overrouting_rate"], 1 / 3)
+        self.assertIsNone(metrics["attributed_costs"].get("overrouting"))
+
+    def test_handoff_requires_facts_and_critical_readiness(self):
+        record = pair()[1]
+        record["handoff"] = dict(applicable=5, verified=5, disclosed=5,
+                                 critical_fields_passed=False, readiness_passed=False)
+        result = BENCHMARK.analyze([pair()[0], record])
+        self.assertEqual(result["workflow_metrics"]["candidate"]["handoff"]["mean_verified_fraction"], 1)
+        self.assertFalse(result["comparison"]["cost_comparison_eligible"])
+        self.assertFalse(result["comparison"]["quality_preserved"])
+
+    def test_new_counts_are_strict_and_rubrics_match(self):
+        for changes in (
+            dict(route_decisions=[dict(rubric_id="x", allowed_routes=["L9"], actual_route="L1")]),
+            dict(route_changes=dict(upgrades=True, downgrades=0, complete=True, source="agent_declared")),
+            dict(handoff=dict(applicable=2, verified=3, disclosed=2,
+                              critical_fields_passed=True, readiness_passed=True)),
+            dict(coordination=[dict(phase="wait", unit="ms", value=float("inf"), source="host_observed")]),
+        ):
+            self.assertFalse(BENCHMARK.valid_record(dict(pair()[1], **changes)))
+        records = pair()
+        records[0]["rubric_id"] = "fixed-v1"
+        records[1]["rubric_id"] = "changed-after-run"
+        self.assertFalse(BENCHMARK.analyze(records)["pairing"]["complete"])
+
     def test_paired_outcomes_allow_explicit_cost_targets(self):
         report = BENCHMARK.analyze(pair(), duration_target=25, token_target=30)
         self.assertEqual(report["comparison"]["duration_reduction_pct"], 30)

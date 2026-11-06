@@ -11,11 +11,12 @@ Claude Code, ChatGPT, and compatible agent hosts.
 - `.agents/plugins/marketplace.json` — repo marketplace manifest for Codex/ChatGPT.
 - `.claude-plugin/marketplace.json` — Claude Code marketplace manifest.
 - `skills/` — reusable workflows, one directory per skill.
-- `skills/task-router/` — stack-neutral Quick/Standard/Large routing.
+- `skills/task-router/` — stack-neutral L1/Quick, L2/Standard and L3/Large routing.
 - `skills/development-workflow/` — proportional Standard/Large implementation.
 - `skills/development-workflow/scripts/parallel_worktree.py` — guarded task
   branches and exceptional parallel-worker worktrees.
 - `skills/finishing-development/` — risk-proportional checks and authorized commit/push.
+- `skills/delivery-handoff/` — testing handoff from actual changes and evidence.
 - `hooks/hooks.json` — optional Codex lifecycle telemetry hook.
 - `scripts/workflow_logger.py` — metadata-only Hook event logger.
 - `scripts/analyze_workflow_logs.py` — local timing report generator.
@@ -30,7 +31,11 @@ identify candidate skills; the selected skill's actual instructions and resource
 are checked before use. The router contains no framework/language table.
 
 Quick work stays in the current context. Standard work uses one primary writer
-and only needed specialist capabilities. Every mutating route creates or reuses
+and minimal Spec/Plan/Tasks, merged or inline when appropriate. A settled high-risk
+local fix can be Quick with all required risk checks. A single-writer multi-session
+task can remain Standard with a persisted plan. Large means durable dependency
+coordination, including sequential work; it does not require multiple agents.
+Load only needed specialist capabilities. Every mutating route creates or reuses
 one task branch; sequential work uses the primary checkout. Large work may
 create at most two
 detached temporary worktrees only for substantial parallel writers with the
@@ -108,6 +113,27 @@ or deployment remain subject to host and repository authorization.
 
 Skill selection is model-based. Existing skills may be selected directly by the
 host, so the router improves routing but does not provide a hard dispatcher.
+The primary agent holds the single Orchestrator role; directly selected workflow
+skills infer missing context. Routes adjust when new design or coordination facts
+appear, preserving tasks, valid evidence, authorization and cumulative fix counts.
+Risk is low/medium/high; legacy normal is read as medium.
+
+## Testing handoff
+
+After finishing, Standard/L2, Large/L3 and explicitly requested testing transfers
+produce a Test-Handoff-<task-id>.md. Other Quick/L1 work uses an inline handoff.
+Changed files, direct/indirect impact, upstream acceptance, test suggestions,
+actual development checks, environment, code references and gaps remain separate.
+
+Uncommitted results use scoped content fingerprints or the existing frozen review
+package. Same HEAD is insufficient to reuse evidence. Code Availability records
+whether the target tester can retrieve that exact result; branch names or hashes
+alone do not establish access. Critical missing/failed gates or inaccessible code
+block the agreed handoff. ready_with_issues is for testable non-blocking gaps.
+Development evidence never substitutes for the testing agent's independent result.
+
+See the [complete specification](docs/relayforge-v2.1-revised-implementation-spec.md)
+and [implementation progress](docs/relayforge-v2.1-implementation-progress.md).
 
 ## Local Telemetry
 
@@ -119,6 +145,11 @@ declared finishing states. It does not record
 prompts, commands, source, patches, tool input/output, credentials, or
 environment variables. Codex does not expose a reliable Skill-load event, so
 planned Skills are not reported as confirmed Skill usage.
+
+The optional --record-workflow-event stdin mode records bounded, agent-declared
+route selections/changes and finishing/handoff summaries without replacing the
+Hook protocol. The analyzer keeps these separate from legacy final-line metadata
+and host events, detects replays/gaps/conflicts, and never infers missing history.
 
 Logs are written under Codex's plugin data directory and retained for 30 days.
 Isolated forward tests can redirect this logger with

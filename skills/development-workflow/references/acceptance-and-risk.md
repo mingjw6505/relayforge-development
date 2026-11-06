@@ -30,7 +30,7 @@ those inputs change. Never replace canonical project docs with a stale summary.
 
 - Low: clear local reversible behavior without a shared invariant. One focused
   result check is enough; do not invent tests for mechanical prose or styling.
-- Normal: business behavior, async state, shared callers or integration changes.
+- Medium (legacy Normal): business behavior, async state, shared callers or integration changes.
   Verify acceptance plus adjacent regressions and inspect the final diff.
 - High: authorization, concurrent mutation, transactions, migrations, irreversible
   data changes or similarly costly failure. Verify the relevant failure invariant

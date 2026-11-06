@@ -1,0 +1,810 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DeepSeek SuperAgent 执行机制与 RelayForge 工作流对照分析</title><style>
+ :root{color-scheme:light;--ink:#172b4d;--muted:#63758c;--line:#dce3ec;--blue:#244f91}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#f4f6f9;color:var(--ink);font:16px/1.85 'Microsoft YaHei','Segoe UI',sans-serif}aside{position:fixed;left:0;top:0;bottom:0;width:245px;overflow:auto;padding:30px 19px;background:#fff;border-right:1px solid var(--line)}aside b{display:block;font-size:18px;margin-bottom:6px}aside p{margin:0 0 18px;color:var(--muted);font-size:13px}nav a{display:block;font-size:13px;line-height:1.55;text-decoration:none;color:#435774;padding:6px 0}nav a:hover{color:var(--blue)}main{max-width:1180px;margin:26px 32px 70px 277px;padding:38px 48px;background:#fff;border:1px solid var(--line);border-radius:8px}h1{font-size:31px;line-height:1.4;letter-spacing:-.5px;margin:0 0 25px;color:#102b50}h2{font-size:24px;margin:46px 0 19px;padding-top:5px;border-bottom:1px solid var(--line);padding-bottom:10px;scroll-margin-top:20px;color:#183d6b}h3{font-size:19px;margin:29px 0 12px;scroll-margin-top:20px}p{margin:13px 0}a{color:#245696;text-underline-offset:3px;overflow-wrap:anywhere}code{font:13px/1.65 Consolas,monospace;background:#f1f4f8;padding:2px 5px;border-radius:3px;overflow-wrap:anywhere}pre{padding:17px;background:#f1f4f8;border:1px solid var(--line);overflow:auto;border-radius:5px;white-space:pre-wrap}pre code{padding:0}table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.7;margin:20px 0}th,td{border:1px solid var(--line);padding:10px 12px;text-align:left;vertical-align:top}th{background:#eaf0f8;color:#1c3a61;font-weight:600}tbody tr:nth-child(even){background:#f8fafc}td:first-child{min-width:100px}ul,ol{padding-left:26px}li{margin:7px 0}.diagram{margin:25px 0;padding:22px 12px 14px;background:#fbfcfe;border:1px solid var(--line);border-radius:6px;overflow:auto;text-align:center}.diagram svg{display:block;width:100%;height:auto;max-width:none!important;min-width:600px;margin:auto}.diagram figcaption{font-size:12px;color:var(--muted);margin-top:12px}.toolbar{display:flex;gap:12px;align-items:center;font-size:12px;color:var(--muted);margin-bottom:25px}.badge{border:1px solid var(--line);border-radius:20px;padding:3px 10px}button{border:1px solid #bac8da;background:white;border-radius:5px;padding:5px 10px;color:#244f91;cursor:pointer}@media(min-width:1800px){main{margin-left:auto;margin-right:auto}}@media(max-width:1050px){aside{display:none}main{margin:15px;padding:25px}h1{font-size:27px}}@media print{body{background:white;font-size:10.5pt}aside,.toolbar{display:none}main{margin:0;padding:0;border:0;max-width:none}h2{break-after:avoid}h3{break-after:avoid}.diagram{break-inside:avoid}.diagram svg{min-width:0}table{font-size:9pt}thead{display:table-header-group}a{color:inherit;text-decoration:none}}
+ </style></head><body><aside><b>源码与工作流分析</b><p>DeepSeek SuperAgent × RelayForge<br>2026 年 11 月 6 日</p><nav><a href="#section-1">1 分析基线与证据边界</a><a href="#section-2">2 两个项目分别解决什么问题</a><a href="#section-3">3 SuperAgent 的核心领域对象</a><a href="#section-4">4 SuperAgent 总体架构</a><a href="#section-5">5 最核心实现的阅读地图</a><a href="#section-6">6 从请求到任务的实际工作流</a><a href="#section-10">7 执行器怎样持续推进任务</a><a href="#section-14">8 状态不是一个枚举</a><a href="#section-15">9 可靠性最关键的五个实现</a><a href="#section-21">10 哪些由代码保证 哪些仍依赖模型</a><a href="#section-22">11 RelayForge 当前工作流</a><a href="#section-23">12 能力对照与缺口定位</a><a href="#section-24">13 当前仓库问题清单</a><a href="#section-32">14 两项隔离探针的复现记录</a><a href="#section-35">15 建议借鉴的最小工作流</a><a href="#section-36">16 改进顺序与验收场景</a><a href="#section-37">17 当前不应引入的复杂度</a><a href="#section-38">18 验证结果与交付范围</a><a href="#section-39">附录 A 上游测试怎样保护核心机制</a><a href="#section-40">附录 B 核心实现参考</a><a href="#section-41">附录 C 当前仓库参考</a></nav></aside><main><div class="toolbar"><span class="badge">静态源码分析</span><span class="badge">2 项已复现问题 · 5 项协议与验证缺口</span><button onclick="window.print()">打印或另存 PDF</button></div><h1 id="section-0">DeepSeek SuperAgent 执行机制与 RelayForge 工作流对照分析</h1>
+<p>分析日期：2026 年 11 月 6 日。对象：DeepSeek 公开研究原型 <code>dsh-superagent-prototype</code> 与当前 RelayForge Development 插件。本文交付执行逻辑、核心实现定位、工作流、架构图和问题清单；不实施工作流或代码改造。</p>
+<p><strong>结论：SuperAgent 最值得借鉴的是任务生命周期的确定性管理。</strong> 它将模型判断与程序控制分开，用不可变授权、任务与执行尝试分离、消息归属、持久化副作用和恢复核对，支撑持续运行。RelayForge 已有按需路由、风险分级、证据复用和有界协作；主要不足是这些约定尚未形成统一的跨会话执行协议。另有两项辅助脚本问题已在临时仓库复现，应先于扩展多代理能力处理。</p>
+<h2 id="section-1">1 分析基线与证据边界</h2>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>固定基线</th>
+<th>本次核对范围</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>SuperAgent</td>
+<td>提交 <code>8c32a9dc5d72c033816c6a8110b37f40cf94fba4</code>；包版本 <code>0.1.0</code></td>
+<td>下载公开源码归档；静态阅读核心、运行时、执行器、策略、消息适配器和相关测试</td>
+</tr>
+<tr>
+<td>RelayForge</td>
+<td>提交 <code>fe1e03cb2c979d4b2056c1cbe253b4e7efbef501</code>；分支 <code>relayforge/fix/quality-and-cost</code>；插件版本 <code>0.1.9</code></td>
+<td>阅读核心技能、交接与并行协议、辅助脚本、日志和评估实现；运行现有测试与两项隔离探针</td>
+</tr>
+</tbody></table>
+<p>SuperAgent 上游将其定位为研究原型，明确公开代码与内部版本、设计文章存在差异。以下执行结论以本次源码快照为准，不将文章中的未来方向当成已实现能力。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/README.md">S01</a></p>
+<p>证据分为三类：<strong>源码事实</strong>表示可定位到实现；<strong>已复现问题</strong>表示在临时测试仓库实际触发；<strong>协议缺口或设计风险</strong>表示现有约定不足以保证某种行为，不代表已经发生用户事故。SuperAgent 未进行依赖安装、服务部署或上游测试执行；上游测试仅用于核对设计覆盖面。</p>
+<h2 id="section-2">2 两个项目分别解决什么问题</h2>
+<p>SuperAgent 是运行在 DeepSeek Harness 中的常驻编排应用。它围绕一个 GitHub 仓库接收事件，按授权决定是否创建任务，维护多个持久会话，并把结果送回原对话。Harness 提供模型调用、工具、会话、事件和持久化等基础设施。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/docs/006-deployment.md">S01</a></p>
+<p>RelayForge 是跨宿主的开发工作流插件。技能指导当前代理选择方法、实现、验证和收尾；Python 脚本为分支、临时 worktree、审查快照和日志提供局部确定性检查。它没有提供与 SuperAgent 等价的常驻调度器。<a href="E:/my-project/relayforge-development/skills/task-router/SKILL.md">L01</a></p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>SuperAgent</th>
+<th>RelayForge</th>
+<th>比较时的判断</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>工作入口</td>
+<td>GitHub、可选飞书、管理面板</td>
+<td>用户当前对话和宿主技能选择</td>
+<td>入口不同属于定位差异</td>
+</tr>
+<tr>
+<td>执行驱动</td>
+<td>事件、周期 pass、持久化队列</td>
+<td>当前代理按技能继续执行</td>
+<td>不应仅因缺少后台循环判定插件有缺陷</td>
+</tr>
+<tr>
+<td>持续状态</td>
+<td>SQLite 中的任务、输入、执行尝试、回执</td>
+<td>对话、计划、局部 JSON manifest</td>
+<td>跨会话可靠性值得比较</td>
+</tr>
+<tr>
+<td>授权执行</td>
+<td>程序检查准入与任务状态，语义范围仍需模型遵守</td>
+<td>宿主权限与工作流约定共同约束</td>
+<td>提示词不能代替权限系统</td>
+</tr>
+<tr>
+<td>并行</td>
+<td>多 Ticket 的运行槽位管理</td>
+<td>默认单写者，例外最多两个并行写者</td>
+<td>并行数量不是质量指标</td>
+</tr>
+<tr>
+<td>依赖协调</td>
+<td>核心侧重消息与任务归属</td>
+<td>显式前置任务、契约和纵向切片</td>
+<td>现有依赖约束应保留</td>
+</tr>
+</tbody></table>
+<h2 id="section-3">3 SuperAgent 的核心领域对象</h2>
+<p>理解源码应先区分“发生了什么”“允许做什么”和“本次由谁执行”。这些对象分别承担不同职责。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/core/model.ts">S02</a></p>
+<table>
+<thead>
+<tr>
+<th>对象</th>
+<th>含义</th>
+<th>最重要的约束</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Source</td>
+<td>某类事件的来源及其配置</td>
+<td>负责监听范围、读取位置和来源身份</td>
+</tr>
+<tr>
+<td>Trigger</td>
+<td>一次不可变的输入事件</td>
+<td>稳定 ID 用于去重；正文和元数据是外部数据</td>
+</tr>
+<tr>
+<td>Thread</td>
+<td>同一讨论范围</td>
+<td>同时最多一个 Eval；可以关联多个任务</td>
+</tr>
+<tr>
+<td>Eval</td>
+<td>对待处理事件批次的一次评估</td>
+<td>先确定性准入，再进行必要的模型判断</td>
+</tr>
+<tr>
+<td>Decision</td>
+<td>本次评估的记录</td>
+<td>接受、忽略、停止、不可用等结论可追溯</td>
+</tr>
+<tr>
+<td>Mandate</td>
+<td>一次接受产生的授权记录</td>
+<td>保存来源、请求人、范围、强度及策略版本；范围扩大需要新任务</td>
+</tr>
+<tr>
+<td>Ticket</td>
+<td>一件获得授权的工作</td>
+<td>持有输入、讨论关联和执行历史；生命周期不等于会话状态</td>
+</tr>
+<tr>
+<td>Assignment</td>
+<td>Ticket 的一次执行绑定</td>
+<td>同一 Ticket 可以先后有多次 Assignment</td>
+</tr>
+<tr>
+<td>Subscription</td>
+<td>Ticket 对 Thread 的订阅关系</td>
+<td>传递上下文；订阅本身不授予新权限</td>
+</tr>
+<tr>
+<td>Input</td>
+<td>交给执行器的增量信息</td>
+<td>区分未投递、已投递和会话已读取</td>
+</tr>
+<tr>
+<td>Report 与 Attention</td>
+<td>执行状态和需要人的具体问题</td>
+<td>等待人由结构化字段表示，不从自由文本猜测</td>
+</tr>
+<tr>
+<td>Effect 与 Receipt</td>
+<td>待执行副作用与发送回执</td>
+<td>支持重试、去重、排序和重启后续办</td>
+</tr>
+</tbody></table>
+<p>最关键的两个区分是：<strong>Ticket 不等于 Assignment；上下文不等于授权。</strong> 重试不需要把原目标变成新任务，收到相关评论也不代表可以扩大工作范围。</p>
+<h2 id="section-4">4 SuperAgent 总体架构</h2>
+<figure class="diagram" id="figure-1"><svg aria-roledescription="flowchart-v2" role="graphics-document document" viewBox="-8 -8 808.4154052734375 622.8782958984375" style="max-width: 808.4154052734375px;" xmlns="http://www.w3.org/2000/svg" width="100%" id="diagram0"><style>#diagram0{font-family:Microsoft YaHei,Arial,sans-serif;font-size:17px;fill:#172b4d;}#diagram0 .error-icon{fill:#f5f6f8;}#diagram0 .error-text{fill:#0a0907;stroke:#0a0907;}#diagram0 .edge-thickness-normal{stroke-width:2px;}#diagram0 .edge-thickness-thick{stroke-width:3.5px;}#diagram0 .edge-pattern-solid{stroke-dasharray:0;}#diagram0 .edge-pattern-dashed{stroke-dasharray:3;}#diagram0 .edge-pattern-dotted{stroke-dasharray:2;}#diagram0 .marker{fill:#63758c;stroke:#63758c;}#diagram0 .marker.cross{stroke:#63758c;}#diagram0 svg{font-family:Microsoft YaHei,Arial,sans-serif;font-size:17px;}#diagram0 .label{font-family:Microsoft YaHei,Arial,sans-serif;color:#172b4d;}#diagram0 .cluster-label text{fill:#0a0907;}#diagram0 .cluster-label span,#diagram0 p{color:#0a0907;}#diagram0 .label text,#diagram0 span,#diagram0 p{fill:#172b4d;color:#172b4d;}#diagram0 .node rect,#diagram0 .node circle,#diagram0 .node ellipse,#diagram0 .node polygon,#diagram0 .node path{fill:#eaf1ff;stroke:#7894c1;stroke-width:1px;}#diagram0 .flowchart-label text{text-anchor:middle;}#diagram0 .node .katex path{fill:#000;stroke:#000;stroke-width:1px;}#diagram0 .node .label{text-align:center;}#diagram0 .node.clickable{cursor:pointer;}#diagram0 .arrowheadPath{fill:#0b0b0b;}#diagram0 .edgePath .path{stroke:#63758c;stroke-width:2.0px;}#diagram0 .flowchart-link{stroke:#63758c;fill:none;}#diagram0 .edgeLabel{background-color:#edf6f3;text-align:center;}#diagram0 .edgeLabel rect{opacity:0.5;background-color:#edf6f3;fill:#edf6f3;}#diagram0 .labelBkg{background-color:rgba(237, 246, 243, 0.5);}#diagram0 .cluster rect{fill:#f5f6f8;stroke:hsl(220, 0%, 86.6666666667%);stroke-width:1px;}#diagram0 .cluster text{fill:#0a0907;}#diagram0 .cluster span,#diagram0 p{color:#0a0907;}#diagram0 div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:Microsoft YaHei,Arial,sans-serif;font-size:12px;background:#f5f6f8;border:1px solid hsl(220, 0%, 86.6666666667%);border-radius:2px;pointer-events:none;z-index:100;}#diagram0 .flowchartTitleText{text-anchor:middle;font-size:18px;fill:#172b4d;}#diagram0 :root{--mermaid-font-family:"trebuchet ms",verdana,arial,sans-serif;}</style><g><marker orient="auto" markerHeight="12" markerWidth="12" markerUnits="userSpaceOnUse" refY="5" refX="6" viewBox="0 0 10 10" class="marker flowchart" id="diagram0_flowchart-pointEnd"><path style="stroke-width: 1; stroke-dasharray: 1, 0;" class="arrowMarkerPath" d="M 0 0 L 10 5 L 0 10 z"></path></marker><marker orient="auto" markerHeight="12" markerWidth="12" markerUnits="userSpaceOnUse" refY="5" refX="4.5" viewBox="0 0 10 10" class="marker flowchart" id="diagram0_flowchart-pointStart"><path style="stroke-width: 1; stroke-dasharray: 1, 0;" class="arrowMarkerPath" d="M 0 5 L 10 10 L 10 0 z"></path></marker><marker orient="auto" markerHeight="11" markerWidth="11" markerUnits="userSpaceOnUse" refY="5" refX="11" viewBox="0 0 10 10" class="marker flowchart" id="diagram0_flowchart-circleEnd"><circle style="stroke-width: 1; stroke-dasharray: 1, 0;" class="arrowMarkerPath" r="5" cy="5" cx="5"></circle></marker><marker orient="auto" markerHeight="11" markerWidth="11" markerUnits="userSpaceOnUse" refY="5" refX="-1" viewBox="0 0 10 10" class="marker flowchart" id="diagram0_flowchart-circleStart"><circle style="stroke-width: 1; stroke-dasharray: 1, 0;" class="arrowMarkerPath" r="5" cy="5" cx="5"></circle></marker><marker orient="auto" markerHeight="11" markerWidth="11" markerUnits="userSpaceOnUse" refY="5.2" refX="12" viewBox="0 0 11 11" class="marker cross flowchart" id="diagram0_flowchart-crossEnd"><path style="stroke-width: 2; stroke-dasharray: 1, 0;" class="arrowMarkerPath" d="M 1,1 l 9,9 M 10,1 l -9,9"></path></marker><marker orient="auto" markerHeight="11" markerWidth="11" markerUnits="userSpaceOnUse" refY="5.2" refX="-1" viewBox="0 0 11 11" class="marker cross flowchart" id="diagram0_flowchart-crossStart"><path style="stroke-width: 2; stroke-dasharray: 1, 0;" class="arrowMarkerPath" d="M 1,1 l 9,9 M 10,1 l -9,9"></path></marker><g class="root"><g class="clusters"><g id="CORE" class="cluster default flowchart-label"><rect height="75" width="736.8072509765625" y="247" x="0" ry="0" rx="0" style=""></rect><g transform="translate(368.40362548828125, 247)" class="cluster-label"><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">领域核心</tspan></text></g></g></g><g class="edgePaths"><path marker-end="url(#diagram0_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-SRC LE-PASS" id="L-SRC-PASS-0" d="M117.79,37L117.79,40.167C117.79,43.333,117.79,49.667,117.79,55.117C117.79,60.567,117.79,65.133,117.79,67.417L117.79,69.7"></path><path marker-end="url(#diagram0_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-UI LE-ENG" id="L-UI-ENG-0" d="M326.04,112L326.04,115.167C326.04,118.333,326.04,124.667,318.079,130.701C310.117,136.735,294.193,142.469,286.232,145.337L278.27,148.204"></path><path marker-end="url(#diagram0_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-PASS LE-ENG" id="L-PASS-ENG-0" d="M117.79,112L117.79,115.167C117.79,118.333,117.79,124.667,125.752,130.701C133.714,136.735,149.637,142.469,157.599,145.337L165.56,148.204"></path><path marker-end="url(#diagram0_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-ENG LE-PART" id="L-ENG-PART-0" d="M221.915,187L221.915,192C221.915,197,221.915,207,221.915,217C221.915,227,221.915,237,229.251,244.847C236.587,252.694,251.259,258.388,258.595,261.235L265.931,264.082"></path><path marker-end="url(#diagram0_flowchart-pointEnd)" style="fill:none;stroke-width:2px;stroke-dasharray:3;" class="edge-thickness-normal edge-pattern-dotted flowchart-link LS-POL LE-PART" id="L-POL-PART-0" d="M617.083,187L617.083,192C617.083,197,617.083,207,617.083,217C617.083,227,617.083,237,592.749,245.057C568.415,253.113,519.748,259.226,495.414,262.283L471.08,265.339"></path><path marker-end="url(#diagram0_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-PART LE-DB" id="L-PART-DB-0" d="M200.228,303L179.976,306.167C159.724,309.333,119.221,315.667,98.969,322C78.717,328.333,78.717,334.667,78.717,344.083C78.717,353.5,78.717,366,78.717,378.5C78.717,391,78.717,403.5,78.717,416C78.717,428.5,78.717,441,78.717,455.333C78.717,469.667,78.717,485.833,79.329,498.051C79.941,510.268,81.165,518.537,81.777,522.671L82.389,526.805"></path><path marker-end="url(#diagram0_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-PART LE-ASSESS" id="L-PART-ASSESS-0" d="M255.489,303L244.696,306.167C233.903,309.333,212.318,315.667,201.525,322C190.733,328.333,190.733,334.667,190.733,340.117C190.733,345.567,190.733,350.133,190.733,352.417L190.733,354.7"></path><path marker-end="url(#diagram0_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-ASSESS LE-MAIN" id="L-ASSESS-MAIN-0" d="M185.799,397L184.955,400.167C184.11,403.333,182.421,409.667,181.577,415.117C180.733,420.567,180.733,425.133,180.733,427.417L180.733,429.7"></path><path marker-end="url(#diagram0_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-PART LE-EX" id="L-PART-EX-0" d="M401.093,303L415.224,306.167C429.354,309.333,457.615,315.667,471.746,322C485.876,328.333,485.876,334.667,485.876,340.117C485.876,345.567,485.876,350.133,485.876,352.417L485.876,354.7"></path><path marker-end="url(#diagram0_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-EX LE-WORK" id="L-EX-WORK-0" d="M475.279,397L473.465,400.167C471.651,403.333,468.023,409.667,462.613,415.477C457.204,421.287,450.012,426.574,446.417,429.217L442.821,431.861"></path><path marker-end="url(#diagram0_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-PART LE-OUT" id="L-PART-OUT-0" d="M513.991,302.903L547.793,306.086C581.596,309.269,649.202,315.634,683.004,321.984C716.807,328.333,716.807,334.667,716.807,340.117C716.807,345.567,716.807,350.133,716.807,352.417L716.807,354.7"></path><path marker-end="url(#diagram0_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-ASSESS LE-FX" id="L-ASSESS-FX-0" d="M261.78,395.434L276.162,398.862C290.543,402.289,319.305,409.145,369.469,416.933C419.633,424.721,491.199,433.442,526.982,437.802L562.765,442.163"></path><path marker-end="url(#diagram0_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-EX LE-FX" id="L-EX-FX-0" d="M544.253,396.561L554.725,399.801C565.196,403.041,586.139,409.52,600.025,415.388C613.91,421.256,620.738,426.511,624.152,429.139L627.566,431.767"></path><path marker-end="url(#diagram0_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-OUT LE-FX" id="L-OUT-FX-0" d="M716.807,397L716.807,400.167C716.807,403.333,716.807,409.667,712.408,415.537C708.009,421.408,699.21,426.816,694.811,429.521L690.412,432.225"></path><path style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-FX LE-DB" id="L-FX-DB-0" d="M568.026,468.783L536.231,474.319C504.437,479.855,440.847,490.928,371.592,505.219C302.336,519.511,227.413,537.022,189.952,545.778L152.491,554.534"></path><path marker-end="url(#diagram0_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-FX LE-HOST" id="L-FX-HOST-0" d="M667.91,472L671.183,477C674.457,482,681.003,492,684.276,504.273C687.549,516.546,687.549,531.093,687.549,538.366L687.549,545.639"></path></g><g class="edgeLabels"><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g transform="translate(617.08251953125, 217)" class="edgeLabel"><g transform="translate(-17.5, -11)" class="label"><rect height="22.000669479370117" width="34.99105453491211" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">约束</tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g transform="translate(687.5494384765625, 502)" class="edgeLabel"><g transform="translate(-43.5, -11)" class="label"><rect height="22.000669479370117" width="86.96260070800781" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">提交后派发</tspan></text></g></g></g><g class="nodes"><g transform="translate(318.541259765625, 284.5)" data-id="PART" data-node="true" id="flowchart-PART-39" class="node default default flowchart-label"><rect height="37" width="390.89892578125" y="-18.5" x="-195.449462890625" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">Intake / Evals / Tickets / Assignments / Replies</tspan></text></g></g><g transform="translate(117.790283203125, 18.5)" data-id="SRC" data-node="true" id="flowchart-SRC-33" class="node default default flowchart-label"><rect height="37" width="210.86328125" y="-18.5" x="-105.431640625" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">GitHub / Feishu Sources</tspan></text></g></g><g transform="translate(117.790283203125, 93.5)" data-id="PASS" data-node="true" id="flowchart-PASS-34" class="node default default flowchart-label"><rect height="37" width="191.5" y="-18.5" x="-95.75" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">Passes 接入与周期推进</tspan></text></g></g><g transform="translate(326.040283203125, 93.5)" data-id="UI" data-node="true" id="flowchart-UI-35" class="node default default flowchart-label"><rect height="37" width="169" y="-18.5" x="-84.5" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">管理面板与会话工具</tspan></text></g></g><g transform="translate(221.915283203125, 168.5)" data-id="ENG" data-node="true" id="flowchart-ENG-36" class="node default default flowchart-label"><rect height="37" width="143.375" y="-18.5" x="-71.6875" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">Engine 事务入口</tspan></text></g></g><g transform="translate(617.08251953125, 168.5)" data-id="POL" data-node="true" id="flowchart-POL-42" class="node default default flowchart-label"><rect height="37" width="187.12890625" y="-18.5" x="-93.564453125" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">Policy 准入与授权复核</tspan></text></g></g><g transform="translate(88.7169189453125, 569.4391593933105)" data-id="DB" data-node="true" id="flowchart-DB-45" class="node default default flowchart-label"><path transform="translate(-63.77392578125,-37.43916105007946)" d="M 0,12.626107366719642 a 63.77392578125,12.626107366719642 0,0,0 127.5478515625 0 a 63.77392578125,12.626107366719642 0,0,0 -127.5478515625 0 l 0,49.626107366719644 a 63.77392578125,12.626107366719642 0,0,0 127.5478515625 0 l 0,-49.626107366719644" style=""></path><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">Store / SQLite</tspan></text></g></g><g transform="translate(190.7325439453125, 378.5)" data-id="ASSESS" data-node="true" id="flowchart-ASSESS-47" class="node default default flowchart-label"><rect height="37" width="142.095703125" y="-18.5" x="-71.0478515625" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">MasterAssessor</tspan></text></g></g><g transform="translate(180.7325439453125, 453.5)" data-id="MAIN" data-node="true" id="flowchart-MAIN-49" class="node default default flowchart-label"><rect height="37" width="156.03125" y="-18.5" x="-78.015625" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">主会话 路由与评估</tspan></text></g></g><g transform="translate(485.8763427734375, 378.5)" data-id="EX" data-node="true" id="flowchart-EX-51" class="node default default flowchart-label"><rect height="37" width="116.75341796875" y="-18.5" x="-58.376708984375" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">DshExecutor</tspan></text></g></g><g transform="translate(413.3870849609375, 453.5)" data-id="WORK" data-node="true" id="flowchart-WORK-53" class="node default default flowchart-label"><rect height="37" width="253.27783203125" y="-18.5" x="-126.638916015625" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">每任务 Worker Session 与目录</tspan></text></g></g><g transform="translate(716.8072509765625, 378.5)" data-id="OUT" data-node="true" id="flowchart-OUT-55" class="node default default flowchart-label"><rect height="37" width="76.10400390625" y="-18.5" x="-38.052001953125" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">Outbox</tspan></text></g></g><g transform="translate(655.7994384765625, 453.5)" data-id="FX" data-node="true" id="flowchart-FX-57" class="node default default flowchart-label"><rect height="37" width="175.546875" y="-18.5" x="-87.7734375" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">Effects 持久化副作用</tspan></text></g></g><g transform="translate(687.5494384765625, 569.4391593933105)" data-id="HOST" data-node="true" id="flowchart-HOST-65" class="node default default flowchart-label"><rect height="37" width="209.73193359375" y="-18.5" x="-104.865966796875" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">Harness / Source 适配器</tspan></text></g></g></g></g></g></svg><figcaption>图 1 · 浏览器缩放可查看细节</figcaption></figure>
+<p><code>Runtime</code> 是装配入口，负责目录锁、Store、策略、会话、执行器、SourceRegistry、Effects 和 HTTP 的生命周期。<code>Engine</code> 是领域修改入口，内部五个部件处理业务状态。两者职责不同：Runtime 负责“接好并运行”，Engine 负责“状态允许怎样变化”。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/app/runtime.ts">S03</a></p>
+<p>图中省略反向回调以便阅读：主会话的路由决策、Worker 报告及执行器生命周期事件都回到 Engine；发送适配器把消息送回原 Source 的对话。</p>
+<p>主会话并非无限大的技术指挥中心。提示词要求它评估和路由；Worker 读取原始请求、调查、实施和验证。程序限制工具和等待行为，但“不要替 Worker 做技术方案”仍主要由提示词约束。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/docs/004-prompts.md">S15</a></p>
+<h2 id="section-5">5 最核心实现的阅读地图</h2>
+<table>
+<thead>
+<tr>
+<th>优先级</th>
+<th>文件与入口</th>
+<th>需要理解的实现</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>第一组</td>
+<td><code>src/core/model.ts</code>、<code>engine.ts</code>、<code>ports.ts</code></td>
+<td>对象、不变量、事务入口、外部依赖接口</td>
+</tr>
+<tr>
+<td>第一组</td>
+<td><code>src/core/intake.ts</code> 的 <code>receive</code></td>
+<td>去重、来源过滤、订阅扇出、后续消息归属</td>
+</tr>
+<tr>
+<td>第一组</td>
+<td><code>src/core/evals.ts</code> 的 <code>start</code>、<code>decide</code>、<code>accept</code></td>
+<td>批次、策略版本、重复接受防护、创建 Mandate 与 Ticket</td>
+</tr>
+<tr>
+<td>第一组</td>
+<td><code>src/core/tickets.ts</code> 的 <code>create</code>、<code>wake</code>、<code>retry</code>、<code>end</code></td>
+<td>任务与执行尝试分离、续接、停止和未处理消息释放</td>
+</tr>
+<tr>
+<td>第二组</td>
+<td><code>src/policy.ts</code> 的 <code>settingsPolicy</code>、<code>assessmentOutcome</code></td>
+<td>谁可发起工作；推断请求何时可以转成实际任务</td>
+</tr>
+<tr>
+<td>第二组</td>
+<td><code>src/app/store.ts</code> 的 <code>atomic</code>、<code>afterCommit</code></td>
+<td>SQLite 保存点、回滚、提交后内存回调</td>
+</tr>
+<tr>
+<td>第二组</td>
+<td><code>src/app/effects.ts</code> 的 <code>enqueue</code>、<code>attempt</code></td>
+<td>持久化副作用、generation、防止旧执行覆盖新任务</td>
+</tr>
+<tr>
+<td>第二组</td>
+<td><code>src/executor/dsh.ts</code> 的 <code>launchQueued</code>、<code>deliverQueued</code>、<code>resume</code></td>
+<td>槽位、会话、目录、增量输入、重试与恢复</td>
+</tr>
+<tr>
+<td>第三组</td>
+<td><code>src/core/assignments.ts</code>、<code>stage.ts</code>、<code>replies.ts</code></td>
+<td>结构化报告、阶段派生、回复目的校验</td>
+</tr>
+<tr>
+<td>第三组</td>
+<td><code>src/app/delivery.ts</code>、<code>outbox.ts</code>、<code>sources/github-channel.ts</code></td>
+<td>会话投递去重、发送回执、GitHub 评论标记</td>
+</tr>
+<tr>
+<td>第三组</td>
+<td><code>src/app/passes.ts</code>、<code>runtime.ts</code>、<code>sessions.ts</code></td>
+<td>推进循环、启动恢复、工具限制、宿主事件衔接</td>
+</tr>
+</tbody></table>
+<p>这些模块共同构成核心；只读 Router 和 Worker 提示词，会漏掉可靠性机制。具体源码链接见文末 S02 至 S19。</p>
+<h2 id="section-6">6 从请求到任务的实际工作流</h2>
+<h3 id="section-7">6.1 接入与去重</h3>
+<ol>
+<li>Source 将 Issue、评论、评审、CI 等输入转换为 Trigger，保留来源身份和回复位置。GitHub 评论 ID 包含评论版本信息，正文被编辑后可成为新事件。</li>
+<li><code>Engine.receive</code> 在事务内调用 <code>Intake.receive</code>。已存在的 Trigger 直接返回 <code>duplicate</code>。</li>
+<li>不在监听范围的事件被标记为过滤；其余事件更新 Thread 及其关联信息。</li>
+<li>向订阅这些 Thread 的 Ticket 追加 Input，并记录消息到达了哪些任务、是否仅供上下文。</li>
+<li>仍由某个 Worker 负责判断的人工后续消息留给该任务；其余事件进入主 Thread 的 Eval 队列。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/sources/github-trigger.ts">S05</a></li>
+</ol>
+<figure class="diagram" id="figure-2"><svg aria-roledescription="flowchart-v2" role="graphics-document document" viewBox="-8 -8 976.8258056640625 1730.578125" style="max-width: 976.8258056640625px;" xmlns="http://www.w3.org/2000/svg" width="100%" id="diagram1"><style>#diagram1{font-family:Microsoft YaHei,Arial,sans-serif;font-size:17px;fill:#172b4d;}#diagram1 .error-icon{fill:#f5f6f8;}#diagram1 .error-text{fill:#0a0907;stroke:#0a0907;}#diagram1 .edge-thickness-normal{stroke-width:2px;}#diagram1 .edge-thickness-thick{stroke-width:3.5px;}#diagram1 .edge-pattern-solid{stroke-dasharray:0;}#diagram1 .edge-pattern-dashed{stroke-dasharray:3;}#diagram1 .edge-pattern-dotted{stroke-dasharray:2;}#diagram1 .marker{fill:#63758c;stroke:#63758c;}#diagram1 .marker.cross{stroke:#63758c;}#diagram1 svg{font-family:Microsoft YaHei,Arial,sans-serif;font-size:17px;}#diagram1 .label{font-family:Microsoft YaHei,Arial,sans-serif;color:#172b4d;}#diagram1 .cluster-label text{fill:#0a0907;}#diagram1 .cluster-label span,#diagram1 p{color:#0a0907;}#diagram1 .label text,#diagram1 span,#diagram1 p{fill:#172b4d;color:#172b4d;}#diagram1 .node rect,#diagram1 .node circle,#diagram1 .node ellipse,#diagram1 .node polygon,#diagram1 .node path{fill:#eaf1ff;stroke:#7894c1;stroke-width:1px;}#diagram1 .flowchart-label text{text-anchor:middle;}#diagram1 .node .katex path{fill:#000;stroke:#000;stroke-width:1px;}#diagram1 .node .label{text-align:center;}#diagram1 .node.clickable{cursor:pointer;}#diagram1 .arrowheadPath{fill:#0b0b0b;}#diagram1 .edgePath .path{stroke:#63758c;stroke-width:2.0px;}#diagram1 .flowchart-link{stroke:#63758c;fill:none;}#diagram1 .edgeLabel{background-color:#edf6f3;text-align:center;}#diagram1 .edgeLabel rect{opacity:0.5;background-color:#edf6f3;fill:#edf6f3;}#diagram1 .labelBkg{background-color:rgba(237, 246, 243, 0.5);}#diagram1 .cluster rect{fill:#f5f6f8;stroke:hsl(220, 0%, 86.6666666667%);stroke-width:1px;}#diagram1 .cluster text{fill:#0a0907;}#diagram1 .cluster span,#diagram1 p{color:#0a0907;}#diagram1 div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:Microsoft YaHei,Arial,sans-serif;font-size:12px;background:#f5f6f8;border:1px solid hsl(220, 0%, 86.6666666667%);border-radius:2px;pointer-events:none;z-index:100;}#diagram1 .flowchartTitleText{text-anchor:middle;font-size:18px;fill:#172b4d;}#diagram1 :root{--mermaid-font-family:"trebuchet ms",verdana,arial,sans-serif;}</style><g><marker orient="auto" markerHeight="12" markerWidth="12" markerUnits="userSpaceOnUse" refY="5" refX="6" viewBox="0 0 10 10" class="marker flowchart" id="diagram1_flowchart-pointEnd"><path style="stroke-width: 1; stroke-dasharray: 1, 0;" class="arrowMarkerPath" d="M 0 0 L 10 5 L 0 10 z"></path></marker><marker orient="auto" markerHeight="12" markerWidth="12" markerUnits="userSpaceOnUse" refY="5" refX="4.5" viewBox="0 0 10 10" class="marker flowchart" id="diagram1_flowchart-pointStart"><path style="stroke-width: 1; stroke-dasharray: 1, 0;" class="arrowMarkerPath" d="M 0 5 L 10 10 L 10 0 z"></path></marker><marker orient="auto" markerHeight="11" markerWidth="11" markerUnits="userSpaceOnUse" refY="5" refX="11" viewBox="0 0 10 10" class="marker flowchart" id="diagram1_flowchart-circleEnd"><circle style="stroke-width: 1; stroke-dasharray: 1, 0;" class="arrowMarkerPath" r="5" cy="5" cx="5"></circle></marker><marker orient="auto" markerHeight="11" markerWidth="11" markerUnits="userSpaceOnUse" refY="5" refX="-1" viewBox="0 0 10 10" class="marker flowchart" id="diagram1_flowchart-circleStart"><circle style="stroke-width: 1; stroke-dasharray: 1, 0;" class="arrowMarkerPath" r="5" cy="5" cx="5"></circle></marker><marker orient="auto" markerHeight="11" markerWidth="11" markerUnits="userSpaceOnUse" refY="5.2" refX="12" viewBox="0 0 11 11" class="marker cross flowchart" id="diagram1_flowchart-crossEnd"><path style="stroke-width: 2; stroke-dasharray: 1, 0;" class="arrowMarkerPath" d="M 1,1 l 9,9 M 10,1 l -9,9"></path></marker><marker orient="auto" markerHeight="11" markerWidth="11" markerUnits="userSpaceOnUse" refY="5.2" refX="-1" viewBox="0 0 11 11" class="marker cross flowchart" id="diagram1_flowchart-crossStart"><path style="stroke-width: 2; stroke-dasharray: 1, 0;" class="arrowMarkerPath" d="M 1,1 l 9,9 M 10,1 l -9,9"></path></marker><g class="root"><g class="clusters"></g><g class="edgePaths"><path marker-end="url(#diagram1_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-A LE-B" id="L-A-B-0" d="M148.354,37L148.354,40.167C148.354,43.333,148.354,49.667,148.415,55.2C148.475,60.734,148.597,65.468,148.657,67.835L148.718,70.202"></path><path marker-end="url(#diagram1_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-B LE-DUP" id="L-B-DUP-0" d="M121.454,159.319L112.078,168.802C102.702,178.285,83.951,197.252,74.575,219.954C65.199,242.655,65.199,269.092,65.199,282.31L65.199,295.528"></path><path marker-end="url(#diagram1_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-B LE-C" id="L-B-C-0" d="M176.254,159.319L185.463,168.802C194.672,178.285,213.09,197.252,222.368,210.935C231.646,224.619,231.784,233.019,231.853,237.219L231.921,241.419"></path><path marker-end="url(#diagram1_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-C LE-FILTER" id="L-C-FILTER-0" d="M216.805,377.735L214.744,385.185C212.683,392.636,208.56,407.537,206.499,419.104C204.438,430.671,204.438,438.904,204.438,443.021L204.438,447.138"></path><path marker-end="url(#diagram1_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-C LE-D" id="L-C-D-0" d="M279.693,345.253L303.892,358.117C328.091,370.981,376.489,396.709,400.688,413.69C424.888,430.671,424.888,438.904,424.888,443.021L424.888,447.138"></path><path marker-end="url(#diagram1_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-D LE-E" id="L-D-E-0" d="M424.888,489.438L424.888,492.604C424.888,495.771,424.888,502.104,424.948,507.638C425.009,513.171,425.13,517.905,425.191,520.272L425.252,522.639"></path><path marker-end="url(#diagram1_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-E LE-W" id="L-E-W-0" d="M496.398,756.365L511.503,773.117C526.608,789.868,556.818,823.372,571.923,844.24C587.028,865.108,587.028,873.342,587.028,877.458L587.028,881.575"></path><path marker-end="url(#diagram1_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-E LE-Q" id="L-E-Q-0" d="M425.388,827.375L425.304,832.292C425.221,837.208,425.054,847.042,424.971,860.042C424.888,873.042,424.888,889.208,424.888,905.375C424.888,921.542,424.888,937.708,424.888,949.908C424.888,962.108,424.888,970.342,424.888,974.458L424.888,978.575"></path><path marker-end="url(#diagram1_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-Q LE-G" id="L-Q-G-0" d="M424.888,1020.875L424.888,1024.042C424.888,1027.208,424.888,1033.542,424.948,1039.075C425.009,1044.609,425.13,1049.343,425.191,1051.71L425.252,1054.077"></path><path marker-end="url(#diagram1_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-G LE-IGNORE" id="L-G-IGNORE-0" d="M362.29,1183.762L330.26,1199.195C298.229,1214.628,234.168,1245.494,202.138,1269.01C170.107,1292.526,170.107,1308.693,170.107,1324.859C170.107,1341.026,170.107,1357.193,170.107,1388.128C170.107,1419.063,170.107,1464.766,170.107,1510.469C170.107,1556.172,170.107,1601.875,171.327,1628.879C172.547,1655.883,174.987,1664.188,176.207,1668.341L177.427,1672.493"></path><path marker-end="url(#diagram1_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-G LE-R" id="L-G-R-0" d="M495.212,1177.035L543.698,1193.589C592.184,1210.143,689.156,1243.251,737.642,1267.889C786.129,1292.526,786.129,1308.693,786.129,1324.859C786.129,1341.026,786.129,1357.193,786.129,1384.161C786.129,1411.129,786.129,1448.899,786.129,1467.784L786.129,1486.669"></path><path marker-end="url(#diagram1_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-G LE-AS" id="L-G-AS-0" d="M452.912,1219.335L456.813,1228.839C460.715,1238.343,468.518,1257.351,472.42,1270.972C476.322,1284.593,476.322,1292.826,476.322,1296.943L476.322,1301.059"></path><path marker-end="url(#diagram1_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-AS LE-MODE" id="L-AS-MODE-0" d="M476.322,1343.359L476.322,1348.359C476.322,1353.359,476.322,1363.359,476.391,1372.559C476.46,1381.76,476.597,1390.16,476.666,1394.36L476.735,1398.56"></path><path marker-end="url(#diagram1_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-MODE LE-IGNORE" id="L-MODE-IGNORE-0" d="M411.401,1552.657L386.36,1568.477C361.319,1584.297,311.237,1615.938,279.025,1636.286C246.814,1656.635,232.473,1665.691,225.303,1670.22L218.132,1674.748"></path><path marker-end="url(#diagram1_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-MODE LE-OBS" id="L-MODE-OBS-0" d="M554.111,1540.789L600.372,1558.588C646.634,1576.386,739.157,1611.982,785.418,1633.897C831.68,1655.811,831.68,1664.045,831.68,1668.161L831.68,1672.278"></path><path marker-end="url(#diagram1_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-MODE LE-ACCEPT" id="L-MODE-ACCEPT-0" d="M423.764,1565.02L410.092,1578.78C396.42,1592.54,369.077,1620.059,370.531,1638.555C371.986,1657.05,402.239,1666.522,417.365,1671.258L432.492,1675.995"></path><path marker-end="url(#diagram1_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-R LE-ACCEPT" id="L-R-ACCEPT-0" d="M767.969,1528.969L748.564,1548.737C729.159,1568.505,690.349,1608.042,655.818,1632.546C621.287,1657.05,591.034,1666.522,575.908,1671.258L560.781,1675.995"></path><path marker-end="url(#diagram1_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-W LE-Q" id="L-W-Q-0" d="M587.028,923.875L587.028,928.875C587.028,933.875,587.028,943.875,571.159,953.622C555.29,963.369,523.551,972.862,507.682,977.609L491.813,982.356"></path></g><g class="edgeLabels"><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g transform="translate(65.199462890625, 216.21875)" class="edgeLabel"><g transform="translate(-9.5, -11)" class="label"><rect height="22.000398635864258" width="19.000343322753906" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">是</tspan></text></g></g><g transform="translate(231.50830078125, 216.21875)" class="edgeLabel"><g transform="translate(-8.5, -11)" class="label"><rect height="22.000398635864258" width="17.000308990478516" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">否</tspan></text></g></g><g transform="translate(204.4378662109375, 422.4375)" class="edgeLabel"><g transform="translate(-8.5, -11)" class="label"><rect height="22.000398635864258" width="17.000308990478516" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">否</tspan></text></g></g><g transform="translate(424.8875732421875, 422.4375)" class="edgeLabel"><g transform="translate(-9.5, -11)" class="label"><rect height="22.000398635864258" width="19.000343322753906" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">是</tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g transform="translate(587.0281982421875, 856.875)" class="edgeLabel"><g transform="translate(-9.5, -11)" class="label"><rect height="22.000398635864258" width="19.000343322753906" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">是</tspan></text></g></g><g transform="translate(424.8875732421875, 905.375)" class="edgeLabel"><g transform="translate(-8.5, -11)" class="label"><rect height="22.000398635864258" width="17.000308990478516" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">否</tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g transform="translate(170.1070556640625, 1373.359375)" class="edgeLabel"><g transform="translate(-8.5, -11)" class="label"><rect height="22.000398635864258" width="17.000308990478516" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">否</tspan></text></g></g><g transform="translate(786.1285400390625, 1324.859375)" class="edgeLabel"><g transform="translate(-34.5, -11)" class="label"><rect height="22.000398635864258" width="68.97122192382812" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">明确请求</tspan></text></g></g><g transform="translate(476.3218994140625, 1276.359375)" class="edgeLabel"><g transform="translate(-35, -11)" class="label"><rect height="22.000398635864258" width="69.97123718261719" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">推断候选</tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g transform="translate(261.15478515625, 1647.578125)" class="edgeLabel"><g transform="translate(-8.5, -11)" class="label"><rect height="22.000398635864258" width="17.000308990478516" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">否</tspan></text></g></g><g transform="translate(831.6796875, 1647.578125)" class="edgeLabel"><g transform="translate(-44.127685546875, -11)" class="label"><rect height="22.000398635864258" width="88.21146392822266" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">是 observe</tspan></text></g></g><g transform="translate(341.733154296875, 1647.578125)" class="edgeLabel"><g transform="translate(-30.04736328125, -11)" class="label"><rect height="22.000398635864258" width="60.06747817993164" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">是 auto</tspan></text></g></g><g transform="translate(651.539794921875, 1647.578125)" class="edgeLabel"><g transform="translate(-26.974609375, -11)" class="label"><rect height="22.000398635864258" width="53.92254638671875" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">accept</tspan></text></g></g><g transform="translate(587.0281982421875, 953.875)" class="edgeLabel"><g transform="translate(-68.390869140625, -11)" class="label"><rect height="22.000398635864258" width="136.7101287841797" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">超范围 handback</tspan></text></g></g></g><g class="nodes"><g transform="translate(148.3538818359375, 18.5)" data-id="A" data-node="true" id="flowchart-A-103" class="node default default flowchart-label"><rect height="37" width="251.14306640625" y="-18.5" x="-125.571533203125" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">Source 生成稳定 ID 的 Trigger</tspan></text></g></g><g transform="translate(148.3538818359375, 130.609375)" data-id="B" data-node="true" id="flowchart-B-104" class="node default default flowchart-label"><polygon style="" transform="translate(-55.609375,55.609375)" class="label-container" points="55.609375,0 111.21875,-55.609375 55.609375,-111.21875 0,-55.609375"></polygon><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">已存储?</tspan></text></g></g><g transform="translate(65.199462890625, 319.328125)" data-id="DUP" data-node="true" id="flowchart-DUP-106" class="node default default flowchart-label"><rect height="37" width="130.39892578125" y="-18.5" x="-65.199462890625" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">返回 duplicate</tspan></text></g></g><g transform="translate(231.50830078125, 319.328125)" data-id="C" data-node="true" id="flowchart-C-108" class="node default default flowchart-label"><polygon style="" transform="translate(-73.109375,73.109375)" class="label-container" points="73.109375,0 146.21875,-73.109375 73.109375,-146.21875 0,-73.109375"></polygon><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">在监听范围?</tspan></text></g></g><g transform="translate(204.4378662109375, 470.9375)" data-id="FILTER" data-node="true" id="flowchart-FILTER-110" class="node default default flowchart-label"><rect height="37" width="112.59375" y="-18.5" x="-56.296875" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">记录 filtered</tspan></text></g></g><g transform="translate(424.8875732421875, 470.9375)" data-id="D" data-node="true" id="flowchart-D-112" class="node default default flowchart-label"><rect height="37" width="272.3056640625" y="-18.5" x="-136.15283203125" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">保存事件 更新 Thread 扇出 Input</tspan></text></g></g><g transform="translate(424.8875732421875, 677.15625)" data-id="E" data-node="true" id="flowchart-E-114" class="node default default flowchart-label"><polygon style="" transform="translate(-149.71875,149.71875)" class="label-container" points="149.71875,0 299.4375,-149.71875 149.71875,-299.4375 0,-149.71875"></polygon><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">人工后续消息已有负责的 Ticket?</tspan></text></g></g><g transform="translate(587.0281982421875, 905.375)" data-id="W" data-node="true" id="flowchart-W-116" class="node default default flowchart-label"><rect height="37" width="259.28125" y="-18.5" x="-129.640625" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">交给该 Worker 判断 不重复立项</tspan></text></g></g><g transform="translate(424.8875732421875, 1002.375)" data-id="Q" data-node="true" id="flowchart-Q-118" class="node default default flowchart-label"><rect height="37" width="202.439453125" y="-18.5" x="-101.2197265625" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">进入 Thread 待评估批次</tspan></text></g></g><g transform="translate(424.8875732421875, 1152.6171875)" data-id="G" data-node="true" id="flowchart-G-120" class="node default default flowchart-label"><polygon style="" transform="translate(-93.7421875,93.7421875)" class="label-container" points="93.7421875,0 187.484375,-93.7421875 93.7421875,-187.484375 0,-93.7421875"></polygon><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">Policy gate 准入?</tspan></text></g></g><g transform="translate(184.3570556640625, 1696.078125)" data-id="IGNORE" data-node="true" id="flowchart-IGNORE-122" class="node default default flowchart-label"><rect height="37" width="107.9619140625" y="-18.5" x="-53.98095703125" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">记录 ignore</tspan></text></g></g><g transform="translate(786.1285400390625, 1510.46875)" data-id="R" data-node="true" id="flowchart-R-124" class="node default default flowchart-label"><rect height="37" width="349.39453125" y="-18.5" x="-174.697265625" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">主会话路由 accept / attach / stop / ignore</tspan></text></g></g><g transform="translate(476.3218994140625, 1324.859375)" data-id="AS" data-node="true" id="flowchart-AS-126" class="node default default flowchart-label"><rect height="37" width="169" y="-18.5" x="-84.5" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">规则与实施意图评估</tspan></text></g></g><g transform="translate(476.3218994140625, 1510.46875)" data-id="MODE" data-node="true" id="flowchart-MODE-128" class="node default default flowchart-label"><polygon style="" transform="translate(-107.109375,107.109375)" class="label-container" points="107.109375,0 214.21875,-107.109375 107.109375,-214.21875 0,-107.109375"></polygon><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">方向成立且命中规则?</tspan></text></g></g><g transform="translate(831.6796875, 1696.078125)" data-id="OBS" data-node="true" id="flowchart-OBS-132" class="node default default flowchart-label"><rect height="37" width="222.03125" y="-18.5" x="-111.015625" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">记录 would_accept 不开工</tspan></text></g></g><g transform="translate(496.636474609375, 1696.078125)" data-id="ACCEPT" data-node="true" id="flowchart-ACCEPT-134" class="node default default flowchart-label"><rect height="37" width="260.32373046875" y="-18.5" x="-130.161865234375" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">accept 创建 Mandate 与 Ticket</tspan></text></g></g></g></g></g></svg><figcaption>图 2 · 浏览器缩放可查看细节</figcaption></figure>
+<h3 id="section-8">6.2 准入与语义判断分层</h3>
+<p><code>Policy.gate</code> 根据 Source 身份、允许名单、是否直接请求、接收范围及策略表，决定事件是否准入和请求强度。模型不能通过一段评论修改名单或把机器人身份变成人。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/policy.ts">S06</a></p>
+<p>明确请求走路由入口，支持接受新任务、附加到已存在任务、停止和忽略。推断请求需要评估规则与意图：实现目标是否成立、是否已有明确方向、是否仍需要设计决策，以及是否命中启用规则。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/app/tools/main.ts">S06</a></p>
+<p><code>off / observe / auto</code> 控制的是推断工作。默认 <code>observe</code> 会记录本来准备接受的任务，而不创建实际 Ticket；明确请求不依赖自动接受模式。<code>observe</code> 会消耗评估成本，不是完全不运行模型。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/policy.ts">S06</a></p>
+<h3 id="section-9">6.3 接受是一组原子状态变化</h3>
+<p><code>Evals.accept</code> 从本次评估构造 Mandate，生成 Ticket ID，记录 Decision，调用 <code>Tickets.create</code> 建立输入与订阅、初次 Assignment，并排队启动和必要的确认消息。外层事务使领域记录整体成功或整体回滚。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/core/tickets.ts">S03</a> 评估侧的具体实现见 <a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/core/evals.ts#L306">Evals.accept</a>。</p>
+<p>同一 Trigger 已接受时返回既有 Decision；评估结果还必须属于有效的 Eval 和策略版本。这避免事件重放、迟到的模型结果或评估期间策略变化导致重复立项。</p>
+<h2 id="section-10">7 执行器怎样持续推进任务</h2>
+<figure class="diagram" id="figure-3"><svg aria-roledescription="sequence" role="graphics-document document" viewBox="-50 -10 1052 976" style="max-width: 1052px;" xmlns="http://www.w3.org/2000/svg" width="100%" id="diagram2"><g><rect class="actor actor-bottom" ry="3" rx="3" name="W" height="65" width="150" stroke="#666" fill="#eaeaea" y="890" x="801"></rect><text style="text-anchor: middle; font-size: 16px; font-weight: 400;" class="actor" alignment-baseline="central" dominant-baseline="central" y="922.5" x="876"><tspan dy="0" x="876">Worker</tspan></text></g><g><rect class="actor actor-bottom" ry="3" rx="3" name="H" height="65" width="150" stroke="#666" fill="#eaeaea" y="890" x="606"></rect><text style="text-anchor: middle; font-size: 16px; font-weight: 400;" class="actor" alignment-baseline="central" dominant-baseline="central" y="922.5" x="681"><tspan dy="0" x="681">Harness Session</tspan></text></g><g><rect class="actor actor-bottom" ry="3" rx="3" name="X" height="65" width="150" stroke="#666" fill="#eaeaea" y="890" x="411"></rect><text style="text-anchor: middle; font-size: 16px; font-weight: 400;" class="actor" alignment-baseline="central" dominant-baseline="central" y="922.5" x="486"><tspan dy="0" x="486">DshExecutor</tspan></text></g><g><rect class="actor actor-bottom" ry="3" rx="3" name="F" height="65" width="150" stroke="#666" fill="#eaeaea" y="890" x="216"></rect><text style="text-anchor: middle; font-size: 16px; font-weight: 400;" class="actor" alignment-baseline="central" dominant-baseline="central" y="922.5" x="291"><tspan dy="0" x="291">Effects / Store</tspan></text></g><g><rect class="actor actor-bottom" ry="3" rx="3" name="E" height="65" width="150" stroke="#666" fill="#eaeaea" y="890" x="0"></rect><text style="text-anchor: middle; font-size: 16px; font-weight: 400;" class="actor" alignment-baseline="central" dominant-baseline="central" y="922.5" x="75"><tspan dy="0" x="75">Engine</tspan></text></g><g><line stroke="#999" stroke-width="0.5px" class="200" y2="890" x2="876" y1="5" x1="876" id="actor4"></line><g id="root-4"><rect class="actor actor-top" ry="3" rx="3" name="W" height="65" width="150" stroke="#666" fill="#eaeaea" y="0" x="801"></rect><text style="text-anchor: middle; font-size: 16px; font-weight: 400;" class="actor" alignment-baseline="central" dominant-baseline="central" y="32.5" x="876"><tspan dy="0" x="876">Worker</tspan></text></g></g><g><line stroke="#999" stroke-width="0.5px" class="200" y2="890" x2="681" y1="5" x1="681" id="actor3"></line><g id="root-3"><rect class="actor actor-top" ry="3" rx="3" name="H" height="65" width="150" stroke="#666" fill="#eaeaea" y="0" x="606"></rect><text style="text-anchor: middle; font-size: 16px; font-weight: 400;" class="actor" alignment-baseline="central" dominant-baseline="central" y="32.5" x="681"><tspan dy="0" x="681">Harness Session</tspan></text></g></g><g><line stroke="#999" stroke-width="0.5px" class="200" y2="890" x2="486" y1="5" x1="486" id="actor2"></line><g id="root-2"><rect class="actor actor-top" ry="3" rx="3" name="X" height="65" width="150" stroke="#666" fill="#eaeaea" y="0" x="411"></rect><text style="text-anchor: middle; font-size: 16px; font-weight: 400;" class="actor" alignment-baseline="central" dominant-baseline="central" y="32.5" x="486"><tspan dy="0" x="486">DshExecutor</tspan></text></g></g><g><line stroke="#999" stroke-width="0.5px" class="200" y2="890" x2="291" y1="5" x1="291" id="actor1"></line><g id="root-1"><rect class="actor actor-top" ry="3" rx="3" name="F" height="65" width="150" stroke="#666" fill="#eaeaea" y="0" x="216"></rect><text style="text-anchor: middle; font-size: 16px; font-weight: 400;" class="actor" alignment-baseline="central" dominant-baseline="central" y="32.5" x="291"><tspan dy="0" x="291">Effects / Store</tspan></text></g></g><g><line stroke="#999" stroke-width="0.5px" class="200" y2="890" x2="75" y1="5" x1="75" id="actor0"></line><g id="root-0"><rect class="actor actor-top" ry="3" rx="3" name="E" height="65" width="150" stroke="#666" fill="#eaeaea" y="0" x="0"></rect><text style="text-anchor: middle; font-size: 16px; font-weight: 400;" class="actor" alignment-baseline="central" dominant-baseline="central" y="32.5" x="75"><tspan dy="0" x="75">Engine</tspan></text></g></g><style>#diagram2{font-family:Microsoft YaHei,Arial,sans-serif;font-size:17px;fill:#172b4d;}#diagram2 .error-icon{fill:#f5f6f8;}#diagram2 .error-text{fill:#0a0907;stroke:#0a0907;}#diagram2 .edge-thickness-normal{stroke-width:2px;}#diagram2 .edge-thickness-thick{stroke-width:3.5px;}#diagram2 .edge-pattern-solid{stroke-dasharray:0;}#diagram2 .edge-pattern-dashed{stroke-dasharray:3;}#diagram2 .edge-pattern-dotted{stroke-dasharray:2;}#diagram2 .marker{fill:#63758c;stroke:#63758c;}#diagram2 .marker.cross{stroke:#63758c;}#diagram2 svg{font-family:Microsoft YaHei,Arial,sans-serif;font-size:17px;}#diagram2 .actor{stroke:#7894c1;fill:#eaf1ff;}#diagram2 text.actor&gt;tspan{fill:#172b4d;stroke:none;}#diagram2 .actor-line{stroke:grey;}#diagram2 .messageLine0{stroke-width:1.5;stroke-dasharray:none;stroke:#172b4d;}#diagram2 .messageLine1{stroke-width:1.5;stroke-dasharray:2,2;stroke:#172b4d;}#diagram2 #arrowhead path{fill:#172b4d;stroke:#172b4d;}#diagram2 .sequenceNumber{fill:#9c8a73;}#diagram2 #sequencenumber{fill:#172b4d;}#diagram2 #crosshead path{fill:#172b4d;stroke:#172b4d;}#diagram2 .messageText{fill:#172b4d;stroke:none;}#diagram2 .labelBox{stroke:#7894c1;fill:#eaf1ff;}#diagram2 .labelText,#diagram2 .labelText&gt;tspan{fill:#172b4d;stroke:none;}#diagram2 .loopText,#diagram2 .loopText&gt;tspan{fill:#172b4d;stroke:none;}#diagram2 .loopLine{stroke-width:2px;stroke-dasharray:2,2;stroke:#7894c1;fill:#7894c1;}#diagram2 .note{stroke:hsl(52.6829268293, 60%, 73.9215686275%);fill:#fff5ad;}#diagram2 .noteText,#diagram2 .noteText&gt;tspan{fill:#333;stroke:none;}#diagram2 .activation0{fill:#edf6f3;stroke:hsl(160, 33.3333333333%, 84.7058823529%);}#diagram2 .activation1{fill:#edf6f3;stroke:hsl(160, 33.3333333333%, 84.7058823529%);}#diagram2 .activation2{fill:#edf6f3;stroke:hsl(160, 33.3333333333%, 84.7058823529%);}#diagram2 .actorPopupMenu{position:absolute;}#diagram2 .actorPopupMenuPanel{position:absolute;fill:#eaf1ff;box-shadow:0px 8px 16px 0px rgba(0,0,0,0.2);filter:drop-shadow(3px 5px 2px rgb(0 0 0 / 0.4));}#diagram2 .actor-man line{stroke:#7894c1;fill:#eaf1ff;}#diagram2 .actor-man circle,#diagram2 line{stroke:#7894c1;fill:#eaf1ff;stroke-width:2px;}#diagram2 :root{--mermaid-font-family:"trebuchet ms",verdana,arial,sans-serif;}</style><g></g><defs><symbol height="24" width="24" id="computer"><path d="M2 2v13h20v-13h-20zm18 11h-16v-9h16v9zm-10.228 6l.466-1h3.524l.467 1h-4.457zm14.228 3h-24l2-6h2.104l-1.33 4h18.45l-1.297-4h2.073l2 6zm-5-10h-14v-7h14v7z" transform="scale(.5)"></path></symbol></defs><defs><symbol clip-rule="evenodd" fill-rule="evenodd" id="database"><path d="M12.258.001l.256.004.255.005.253.008.251.01.249.012.247.015.246.016.242.019.241.02.239.023.236.024.233.027.231.028.229.031.225.032.223.034.22.036.217.038.214.04.211.041.208.043.205.045.201.046.198.048.194.05.191.051.187.053.183.054.18.056.175.057.172.059.168.06.163.061.16.063.155.064.15.066.074.033.073.033.071.034.07.034.069.035.068.035.067.035.066.035.064.036.064.036.062.036.06.036.06.037.058.037.058.037.055.038.055.038.053.038.052.038.051.039.05.039.048.039.047.039.045.04.044.04.043.04.041.04.04.041.039.041.037.041.036.041.034.041.033.042.032.042.03.042.029.042.027.042.026.043.024.043.023.043.021.043.02.043.018.044.017.043.015.044.013.044.012.044.011.045.009.044.007.045.006.045.004.045.002.045.001.045v17l-.001.045-.002.045-.004.045-.006.045-.007.045-.009.044-.011.045-.012.044-.013.044-.015.044-.017.043-.018.044-.02.043-.021.043-.023.043-.024.043-.026.043-.027.042-.029.042-.03.042-.032.042-.033.042-.034.041-.036.041-.037.041-.039.041-.04.041-.041.04-.043.04-.044.04-.045.04-.047.039-.048.039-.05.039-.051.039-.052.038-.053.038-.055.038-.055.038-.058.037-.058.037-.06.037-.06.036-.062.036-.064.036-.064.036-.066.035-.067.035-.068.035-.069.035-.07.034-.071.034-.073.033-.074.033-.15.066-.155.064-.16.063-.163.061-.168.06-.172.059-.175.057-.18.056-.183.054-.187.053-.191.051-.194.05-.198.048-.201.046-.205.045-.208.043-.211.041-.214.04-.217.038-.22.036-.223.034-.225.032-.229.031-.231.028-.233.027-.236.024-.239.023-.241.02-.242.019-.246.016-.247.015-.249.012-.251.01-.253.008-.255.005-.256.004-.258.001-.258-.001-.256-.004-.255-.005-.253-.008-.251-.01-.249-.012-.247-.015-.245-.016-.243-.019-.241-.02-.238-.023-.236-.024-.234-.027-.231-.028-.228-.031-.226-.032-.223-.034-.22-.036-.217-.038-.214-.04-.211-.041-.208-.043-.204-.045-.201-.046-.198-.048-.195-.05-.19-.051-.187-.053-.184-.054-.179-.056-.176-.057-.172-.059-.167-.06-.164-.061-.159-.063-.155-.064-.151-.066-.074-.033-.072-.033-.072-.034-.07-.034-.069-.035-.068-.035-.067-.035-.066-.035-.064-.036-.063-.036-.062-.036-.061-.036-.06-.037-.058-.037-.057-.037-.056-.038-.055-.038-.053-.038-.052-.038-.051-.039-.049-.039-.049-.039-.046-.039-.046-.04-.044-.04-.043-.04-.041-.04-.04-.041-.039-.041-.037-.041-.036-.041-.034-.041-.033-.042-.032-.042-.03-.042-.029-.042-.027-.042-.026-.043-.024-.043-.023-.043-.021-.043-.02-.043-.018-.044-.017-.043-.015-.044-.013-.044-.012-.044-.011-.045-.009-.044-.007-.045-.006-.045-.004-.045-.002-.045-.001-.045v-17l.001-.045.002-.045.004-.045.006-.045.007-.045.009-.044.011-.045.012-.044.013-.044.015-.044.017-.043.018-.044.02-.043.021-.043.023-.043.024-.043.026-.043.027-.042.029-.042.03-.042.032-.042.033-.042.034-.041.036-.041.037-.041.039-.041.04-.041.041-.04.043-.04.044-.04.046-.04.046-.039.049-.039.049-.039.051-.039.052-.038.053-.038.055-.038.056-.038.057-.037.058-.037.06-.037.061-.036.062-.036.063-.036.064-.036.066-.035.067-.035.068-.035.069-.035.07-.034.072-.034.072-.033.074-.033.151-.066.155-.064.159-.063.164-.061.167-.06.172-.059.176-.057.179-.056.184-.054.187-.053.19-.051.195-.05.198-.048.201-.046.204-.045.208-.043.211-.041.214-.04.217-.038.22-.036.223-.034.226-.032.228-.031.231-.028.234-.027.236-.024.238-.023.241-.02.243-.019.245-.016.247-.015.249-.012.251-.01.253-.008.255-.005.256-.004.258-.001.258.001zm-9.258 20.499v.01l.001.021.003.021.004.022.005.021.006.022.007.022.009.023.01.022.011.023.012.023.013.023.015.023.016.024.017.023.018.024.019.024.021.024.022.025.023.024.024.025.052.049.056.05.061.051.066.051.07.051.075.051.079.052.084.052.088.052.092.052.097.052.102.051.105.052.11.052.114.051.119.051.123.051.127.05.131.05.135.05.139.048.144.049.147.047.152.047.155.047.16.045.163.045.167.043.171.043.176.041.178.041.183.039.187.039.19.037.194.035.197.035.202.033.204.031.209.03.212.029.216.027.219.025.222.024.226.021.23.02.233.018.236.016.24.015.243.012.246.01.249.008.253.005.256.004.259.001.26-.001.257-.004.254-.005.25-.008.247-.011.244-.012.241-.014.237-.016.233-.018.231-.021.226-.021.224-.024.22-.026.216-.027.212-.028.21-.031.205-.031.202-.034.198-.034.194-.036.191-.037.187-.039.183-.04.179-.04.175-.042.172-.043.168-.044.163-.045.16-.046.155-.046.152-.047.148-.048.143-.049.139-.049.136-.05.131-.05.126-.05.123-.051.118-.052.114-.051.11-.052.106-.052.101-.052.096-.052.092-.052.088-.053.083-.051.079-.052.074-.052.07-.051.065-.051.06-.051.056-.05.051-.05.023-.024.023-.025.021-.024.02-.024.019-.024.018-.024.017-.024.015-.023.014-.024.013-.023.012-.023.01-.023.01-.022.008-.022.006-.022.006-.022.004-.022.004-.021.001-.021.001-.021v-4.127l-.077.055-.08.053-.083.054-.085.053-.087.052-.09.052-.093.051-.095.05-.097.05-.1.049-.102.049-.105.048-.106.047-.109.047-.111.046-.114.045-.115.045-.118.044-.12.043-.122.042-.124.042-.126.041-.128.04-.13.04-.132.038-.134.038-.135.037-.138.037-.139.035-.142.035-.143.034-.144.033-.147.032-.148.031-.15.03-.151.03-.153.029-.154.027-.156.027-.158.026-.159.025-.161.024-.162.023-.163.022-.165.021-.166.02-.167.019-.169.018-.169.017-.171.016-.173.015-.173.014-.175.013-.175.012-.177.011-.178.01-.179.008-.179.008-.181.006-.182.005-.182.004-.184.003-.184.002h-.37l-.184-.002-.184-.003-.182-.004-.182-.005-.181-.006-.179-.008-.179-.008-.178-.01-.176-.011-.176-.012-.175-.013-.173-.014-.172-.015-.171-.016-.17-.017-.169-.018-.167-.019-.166-.02-.165-.021-.163-.022-.162-.023-.161-.024-.159-.025-.157-.026-.156-.027-.155-.027-.153-.029-.151-.03-.15-.03-.148-.031-.146-.032-.145-.033-.143-.034-.141-.035-.14-.035-.137-.037-.136-.037-.134-.038-.132-.038-.13-.04-.128-.04-.126-.041-.124-.042-.122-.042-.12-.044-.117-.043-.116-.045-.113-.045-.112-.046-.109-.047-.106-.047-.105-.048-.102-.049-.1-.049-.097-.05-.095-.05-.093-.052-.09-.051-.087-.052-.085-.053-.083-.054-.08-.054-.077-.054v4.127zm0-5.654v.011l.001.021.003.021.004.021.005.022.006.022.007.022.009.022.01.022.011.023.012.023.013.023.015.024.016.023.017.024.018.024.019.024.021.024.022.024.023.025.024.024.052.05.056.05.061.05.066.051.07.051.075.052.079.051.084.052.088.052.092.052.097.052.102.052.105.052.11.051.114.051.119.052.123.05.127.051.131.05.135.049.139.049.144.048.147.048.152.047.155.046.16.045.163.045.167.044.171.042.176.042.178.04.183.04.187.038.19.037.194.036.197.034.202.033.204.032.209.03.212.028.216.027.219.025.222.024.226.022.23.02.233.018.236.016.24.014.243.012.246.01.249.008.253.006.256.003.259.001.26-.001.257-.003.254-.006.25-.008.247-.01.244-.012.241-.015.237-.016.233-.018.231-.02.226-.022.224-.024.22-.025.216-.027.212-.029.21-.03.205-.032.202-.033.198-.035.194-.036.191-.037.187-.039.183-.039.179-.041.175-.042.172-.043.168-.044.163-.045.16-.045.155-.047.152-.047.148-.048.143-.048.139-.05.136-.049.131-.05.126-.051.123-.051.118-.051.114-.052.11-.052.106-.052.101-.052.096-.052.092-.052.088-.052.083-.052.079-.052.074-.051.07-.052.065-.051.06-.05.056-.051.051-.049.023-.025.023-.024.021-.025.02-.024.019-.024.018-.024.017-.024.015-.023.014-.023.013-.024.012-.022.01-.023.01-.023.008-.022.006-.022.006-.022.004-.021.004-.022.001-.021.001-.021v-4.139l-.077.054-.08.054-.083.054-.085.052-.087.053-.09.051-.093.051-.095.051-.097.05-.1.049-.102.049-.105.048-.106.047-.109.047-.111.046-.114.045-.115.044-.118.044-.12.044-.122.042-.124.042-.126.041-.128.04-.13.039-.132.039-.134.038-.135.037-.138.036-.139.036-.142.035-.143.033-.144.033-.147.033-.148.031-.15.03-.151.03-.153.028-.154.028-.156.027-.158.026-.159.025-.161.024-.162.023-.163.022-.165.021-.166.02-.167.019-.169.018-.169.017-.171.016-.173.015-.173.014-.175.013-.175.012-.177.011-.178.009-.179.009-.179.007-.181.007-.182.005-.182.004-.184.003-.184.002h-.37l-.184-.002-.184-.003-.182-.004-.182-.005-.181-.007-.179-.007-.179-.009-.178-.009-.176-.011-.176-.012-.175-.013-.173-.014-.172-.015-.171-.016-.17-.017-.169-.018-.167-.019-.166-.02-.165-.021-.163-.022-.162-.023-.161-.024-.159-.025-.157-.026-.156-.027-.155-.028-.153-.028-.151-.03-.15-.03-.148-.031-.146-.033-.145-.033-.143-.033-.141-.035-.14-.036-.137-.036-.136-.037-.134-.038-.132-.039-.13-.039-.128-.04-.126-.041-.124-.042-.122-.043-.12-.043-.117-.044-.116-.044-.113-.046-.112-.046-.109-.046-.106-.047-.105-.048-.102-.049-.1-.049-.097-.05-.095-.051-.093-.051-.09-.051-.087-.053-.085-.052-.083-.054-.08-.054-.077-.054v4.139zm0-5.666v.011l.001.02.003.022.004.021.005.022.006.021.007.022.009.023.01.022.011.023.012.023.013.023.015.023.016.024.017.024.018.023.019.024.021.025.022.024.023.024.024.025.052.05.056.05.061.05.066.051.07.051.075.052.079.051.084.052.088.052.092.052.097.052.102.052.105.051.11.052.114.051.119.051.123.051.127.05.131.05.135.05.139.049.144.048.147.048.152.047.155.046.16.045.163.045.167.043.171.043.176.042.178.04.183.04.187.038.19.037.194.036.197.034.202.033.204.032.209.03.212.028.216.027.219.025.222.024.226.021.23.02.233.018.236.017.24.014.243.012.246.01.249.008.253.006.256.003.259.001.26-.001.257-.003.254-.006.25-.008.247-.01.244-.013.241-.014.237-.016.233-.018.231-.02.226-.022.224-.024.22-.025.216-.027.212-.029.21-.03.205-.032.202-.033.198-.035.194-.036.191-.037.187-.039.183-.039.179-.041.175-.042.172-.043.168-.044.163-.045.16-.045.155-.047.152-.047.148-.048.143-.049.139-.049.136-.049.131-.051.126-.05.123-.051.118-.052.114-.051.11-.052.106-.052.101-.052.096-.052.092-.052.088-.052.083-.052.079-.052.074-.052.07-.051.065-.051.06-.051.056-.05.051-.049.023-.025.023-.025.021-.024.02-.024.019-.024.018-.024.017-.024.015-.023.014-.024.013-.023.012-.023.01-.022.01-.023.008-.022.006-.022.006-.022.004-.022.004-.021.001-.021.001-.021v-4.153l-.077.054-.08.054-.083.053-.085.053-.087.053-.09.051-.093.051-.095.051-.097.05-.1.049-.102.048-.105.048-.106.048-.109.046-.111.046-.114.046-.115.044-.118.044-.12.043-.122.043-.124.042-.126.041-.128.04-.13.039-.132.039-.134.038-.135.037-.138.036-.139.036-.142.034-.143.034-.144.033-.147.032-.148.032-.15.03-.151.03-.153.028-.154.028-.156.027-.158.026-.159.024-.161.024-.162.023-.163.023-.165.021-.166.02-.167.019-.169.018-.169.017-.171.016-.173.015-.173.014-.175.013-.175.012-.177.01-.178.01-.179.009-.179.007-.181.006-.182.006-.182.004-.184.003-.184.001-.185.001-.185-.001-.184-.001-.184-.003-.182-.004-.182-.006-.181-.006-.179-.007-.179-.009-.178-.01-.176-.01-.176-.012-.175-.013-.173-.014-.172-.015-.171-.016-.17-.017-.169-.018-.167-.019-.166-.02-.165-.021-.163-.023-.162-.023-.161-.024-.159-.024-.157-.026-.156-.027-.155-.028-.153-.028-.151-.03-.15-.03-.148-.032-.146-.032-.145-.033-.143-.034-.141-.034-.14-.036-.137-.036-.136-.037-.134-.038-.132-.039-.13-.039-.128-.041-.126-.041-.124-.041-.122-.043-.12-.043-.117-.044-.116-.044-.113-.046-.112-.046-.109-.046-.106-.048-.105-.048-.102-.048-.1-.05-.097-.049-.095-.051-.093-.051-.09-.052-.087-.052-.085-.053-.083-.053-.08-.054-.077-.054v4.153zm8.74-8.179l-.257.004-.254.005-.25.008-.247.011-.244.012-.241.014-.237.016-.233.018-.231.021-.226.022-.224.023-.22.026-.216.027-.212.028-.21.031-.205.032-.202.033-.198.034-.194.036-.191.038-.187.038-.183.04-.179.041-.175.042-.172.043-.168.043-.163.045-.16.046-.155.046-.152.048-.148.048-.143.048-.139.049-.136.05-.131.05-.126.051-.123.051-.118.051-.114.052-.11.052-.106.052-.101.052-.096.052-.092.052-.088.052-.083.052-.079.052-.074.051-.07.052-.065.051-.06.05-.056.05-.051.05-.023.025-.023.024-.021.024-.02.025-.019.024-.018.024-.017.023-.015.024-.014.023-.013.023-.012.023-.01.023-.01.022-.008.022-.006.023-.006.021-.004.022-.004.021-.001.021-.001.021.001.021.001.021.004.021.004.022.006.021.006.023.008.022.01.022.01.023.012.023.013.023.014.023.015.024.017.023.018.024.019.024.02.025.021.024.023.024.023.025.051.05.056.05.06.05.065.051.07.052.074.051.079.052.083.052.088.052.092.052.096.052.101.052.106.052.11.052.114.052.118.051.123.051.126.051.131.05.136.05.139.049.143.048.148.048.152.048.155.046.16.046.163.045.168.043.172.043.175.042.179.041.183.04.187.038.191.038.194.036.198.034.202.033.205.032.21.031.212.028.216.027.22.026.224.023.226.022.231.021.233.018.237.016.241.014.244.012.247.011.25.008.254.005.257.004.26.001.26-.001.257-.004.254-.005.25-.008.247-.011.244-.012.241-.014.237-.016.233-.018.231-.021.226-.022.224-.023.22-.026.216-.027.212-.028.21-.031.205-.032.202-.033.198-.034.194-.036.191-.038.187-.038.183-.04.179-.041.175-.042.172-.043.168-.043.163-.045.16-.046.155-.046.152-.048.148-.048.143-.048.139-.049.136-.05.131-.05.126-.051.123-.051.118-.051.114-.052.11-.052.106-.052.101-.052.096-.052.092-.052.088-.052.083-.052.079-.052.074-.051.07-.052.065-.051.06-.05.056-.05.051-.05.023-.025.023-.024.021-.024.02-.025.019-.024.018-.024.017-.023.015-.024.014-.023.013-.023.012-.023.01-.023.01-.022.008-.022.006-.023.006-.021.004-.022.004-.021.001-.021.001-.021-.001-.021-.001-.021-.004-.021-.004-.022-.006-.021-.006-.023-.008-.022-.01-.022-.01-.023-.012-.023-.013-.023-.014-.023-.015-.024-.017-.023-.018-.024-.019-.024-.02-.025-.021-.024-.023-.024-.023-.025-.051-.05-.056-.05-.06-.05-.065-.051-.07-.052-.074-.051-.079-.052-.083-.052-.088-.052-.092-.052-.096-.052-.101-.052-.106-.052-.11-.052-.114-.052-.118-.051-.123-.051-.126-.051-.131-.05-.136-.05-.139-.049-.143-.048-.148-.048-.152-.048-.155-.046-.16-.046-.163-.045-.168-.043-.172-.043-.175-.042-.179-.041-.183-.04-.187-.038-.191-.038-.194-.036-.198-.034-.202-.033-.205-.032-.21-.031-.212-.028-.216-.027-.22-.026-.224-.023-.226-.022-.231-.021-.233-.018-.237-.016-.241-.014-.244-.012-.247-.011-.25-.008-.254-.005-.257-.004-.26-.001-.26.001z" transform="scale(.5)"></path></symbol></defs><defs><symbol height="24" width="24" id="clock"><path d="M12 2c5.514 0 10 4.486 10 10s-4.486 10-10 10-10-4.486-10-10 4.486-10 10-10zm0-2c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm5.848 12.459c.202.038.202.333.001.372-1.907.361-6.045 1.111-6.547 1.111-.719 0-1.301-.582-1.301-1.301 0-.512.77-5.447 1.125-7.445.034-.192.312-.181.343.014l.985 6.238 5.394 1.011z" transform="scale(.5)"></path></symbol></defs><defs><marker orient="auto" markerHeight="12" markerWidth="12" markerUnits="userSpaceOnUse" refY="5" refX="7.9" id="arrowhead"><path d="M 0 0 L 10 5 L 0 10 z"></path></marker></defs><defs><marker refY="4.5" refX="4" orient="auto" markerHeight="8" markerWidth="15" id="crosshead"><path style="stroke-dasharray: 0, 0;" d="M 1,2 L 6,7 M 6,2 L 1,7" stroke-width="1pt" stroke="#000000" fill="none"></path></marker></defs><defs><marker orient="auto" markerHeight="28" markerWidth="20" refY="7" refX="15.5" id="filled-head"><path d="M 18,7 L9,13 L14,7 L9,1 Z"></path></marker></defs><defs><marker orient="auto" markerHeight="40" markerWidth="60" refY="15" refX="15" id="sequencenumber"><circle r="6" cy="15" cx="15"></circle></marker></defs><g><rect class="note" ry="0" rx="0" height="45" width="846" stroke="#666" fill="#EDF2AE" y="666" x="52.5"></rect><text style="font-size: 16px; font-weight: 400;" dy="1em" class="noteText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="672" x="476"><tspan x="476">progress 通常内部保留 问题与可交付结果才向外转发</tspan></text></g><g><rect class="note" ry="0" rx="0" height="45" width="651" stroke="#666" fill="#EDF2AE" y="825" x="52.5"></rect><text style="font-size: 16px; font-weight: 400;" dy="1em" class="noteText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="831" x="378"><tspan x="378">重试替换 Assignment 保留 Ticket 会话与目录</tspan></text></g><text style="font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="80" x="182">事务内记录 Ticket /</text><text style="font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="101" x="182">Assignment / launch</text><line style="fill: none;" marker-end="url(#arrowhead)" stroke="none" stroke-width="2" class="messageLine0" y2="138" x2="287" y1="138" x1="76"></line><text style="font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="153" x="387">提交后派发 launch</text><line style="fill: none;" marker-end="url(#arrowhead)" stroke="none" stroke-width="2" class="messageLine0" y2="190" x2="482" y1="190" x1="292"></line><text style="font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="205" x="487">复核任务 预留槽位</text><text style="font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="226" x="487">准备目录</text><path style="fill: none;" marker-end="url(#arrowhead)" stroke="none" stroke-width="2" class="messageLine0" d="M 487,263 C 547,253 547,293 487,283"></path><text style="font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="308" x="582">创建或恢复 worker-ticket</text><text style="font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="329" x="582">会话</text><line style="fill: none;" marker-end="url(#arrowhead)" stroke="none" stroke-width="2" class="messageLine0" y2="366" x2="677" y1="366" x1="487"></line><text style="font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="381" x="582">按稳定 requestId 投递任务</text><line style="fill: none;" marker-end="url(#arrowhead)" stroke="none" stroke-width="2" class="messageLine0" y2="418" x2="677" y1="418" x1="487"></line><text style="font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="433" x="777">原始请求 任务范围 按需资源</text><line style="fill: none;" marker-end="url(#arrowhead)" stroke="none" stroke-width="2" class="messageLine0" y2="470" x2="872" y1="470" x1="682"></line><text style="font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="485" x="877">调查 实现 验证</text><path style="fill: none;" marker-end="url(#arrowhead)" stroke="none" stroke-width="2" class="messageLine0" d="M 877,522 C 937,512 937,552 877,542"></path><text style="font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="567" x="477">progress / ready / blocked / failed</text><line style="fill: none;" marker-end="url(#arrowhead)" stroke="none" stroke-width="2" class="messageLine0" y2="604" x2="79" y1="604" x1="875"></line><text style="font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="619" x="182">保存报告 与必要通知同事务排队</text><line style="fill: none;" marker-end="url(#arrowhead)" stroke="none" stroke-width="2" class="messageLine0" y2="656" x2="287" y1="656" x1="76"></line><text style="font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="726" x="279">新 Input 进入既有任务</text><line style="fill: none;" marker-end="url(#arrowhead)" stroke="none" stroke-width="2" class="messageLine0" y2="763" x2="482" y1="763" x1="76"></line><text style="font-size: 16px; font-weight: 400;" dy="1em" class="messageText" alignment-baseline="middle" dominant-baseline="middle" text-anchor="middle" y="778" x="582">稳定 Input ID 增量投递</text><line style="fill: none;" marker-end="url(#arrowhead)" stroke="none" stroke-width="2" class="messageLine0" y2="815" x2="677" y1="815" x1="487"></line></svg><figcaption>图 3 · 浏览器缩放可查看细节</figcaption></figure>
+<h3 id="section-11">7.1 一个任务保留一个工作上下文</h3>
+<p><code>DshExecutor</code> 使用 <code>worker-&lt;ticketId&gt;</code> 作为持久会话 ID，以任务短名和 ID 后缀生成目录。配置的 prepare 命令可以创建 Git worktree；如果未配置，默认只是创建工作目录。因此“每 Ticket 一个目录”不能直接等同于“内置 Git 隔离”或“每次重试创建新 worktree”。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/executor/dsh.ts">S08</a></p>
+<p>首次投递包含原始事件和任务信息；后续 Assignment 尽量只交付新增信息。长文本提供预览与资源读取位置，避免持续复制整个历史。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/app/delivery.ts">S08</a></p>
+<h3 id="section-12">7.2 并发围绕运行槽位</h3>
+<p>槽位统计包含启动中、运行中和回合结束后仍在运行的后台工作。人工后续输入可使用一个额外槽位，避免新任务占满容量后阻塞人对旧任务的继续处理。它不是任意增加并发的通道。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/executor/dsh.ts">S08</a></p>
+<p>Worker 回合结束但后台命令或子代理尚在运行时，不能立刻报告任务在等待。执行器追踪这些工作；普通后台收尾有上限。向人交接时释放槽位，停止子代理，部分供人检查的服务进程可继续保留，直至 Assignment 结束。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/executor/dsh.ts">S08</a></p>
+<h3 id="section-13">7.3 结构化报告决定交接</h3>
+<p>报告包括 <code>progress / waiting / ready / blocked / failed / dropped</code>，另有具体问题字段。代码拒绝同时“ready”与“提出问题”等不一致组合。普通 progress 通常不向主会话转发；需要人回答、结果或失败才走相应通知。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/app/notices.ts">S10</a></p>
+<p>但 <code>ready</code> 的技术质量并未由状态机自动证明。实现是否符合需求、测试是否充分，仍依赖 Worker、审查和项目检查。结构化状态阻止部分逻辑矛盾，不能代替验收。</p>
+<h2 id="section-14">8 状态不是一个枚举</h2>
+<p>SuperAgent 同时管理任务结局、执行绑定、报告和展示阶段。混为一个 <code>done</code> 会使恢复逻辑失真。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/core/assignments.ts">S02</a></p>
+<figure class="diagram" id="figure-4"><svg aria-roledescription="flowchart-v2" role="graphics-document document" viewBox="-8 -8 978.7939453125 866.75" style="max-width: 978.7939453125px;" xmlns="http://www.w3.org/2000/svg" width="100%" id="diagram3"><style>#diagram3{font-family:Microsoft YaHei,Arial,sans-serif;font-size:17px;fill:#172b4d;}#diagram3 .error-icon{fill:#f5f6f8;}#diagram3 .error-text{fill:#0a0907;stroke:#0a0907;}#diagram3 .edge-thickness-normal{stroke-width:2px;}#diagram3 .edge-thickness-thick{stroke-width:3.5px;}#diagram3 .edge-pattern-solid{stroke-dasharray:0;}#diagram3 .edge-pattern-dashed{stroke-dasharray:3;}#diagram3 .edge-pattern-dotted{stroke-dasharray:2;}#diagram3 .marker{fill:#63758c;stroke:#63758c;}#diagram3 .marker.cross{stroke:#63758c;}#diagram3 svg{font-family:Microsoft YaHei,Arial,sans-serif;font-size:17px;}#diagram3 .label{font-family:Microsoft YaHei,Arial,sans-serif;color:#172b4d;}#diagram3 .cluster-label text{fill:#0a0907;}#diagram3 .cluster-label span,#diagram3 p{color:#0a0907;}#diagram3 .label text,#diagram3 span,#diagram3 p{fill:#172b4d;color:#172b4d;}#diagram3 .node rect,#diagram3 .node circle,#diagram3 .node ellipse,#diagram3 .node polygon,#diagram3 .node path{fill:#eaf1ff;stroke:#7894c1;stroke-width:1px;}#diagram3 .flowchart-label text{text-anchor:middle;}#diagram3 .node .katex path{fill:#000;stroke:#000;stroke-width:1px;}#diagram3 .node .label{text-align:center;}#diagram3 .node.clickable{cursor:pointer;}#diagram3 .arrowheadPath{fill:#0b0b0b;}#diagram3 .edgePath .path{stroke:#63758c;stroke-width:2.0px;}#diagram3 .flowchart-link{stroke:#63758c;fill:none;}#diagram3 .edgeLabel{background-color:#edf6f3;text-align:center;}#diagram3 .edgeLabel rect{opacity:0.5;background-color:#edf6f3;fill:#edf6f3;}#diagram3 .labelBkg{background-color:rgba(237, 246, 243, 0.5);}#diagram3 .cluster rect{fill:#f5f6f8;stroke:hsl(220, 0%, 86.6666666667%);stroke-width:1px;}#diagram3 .cluster text{fill:#0a0907;}#diagram3 .cluster span,#diagram3 p{color:#0a0907;}#diagram3 div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:Microsoft YaHei,Arial,sans-serif;font-size:12px;background:#f5f6f8;border:1px solid hsl(220, 0%, 86.6666666667%);border-radius:2px;pointer-events:none;z-index:100;}#diagram3 .flowchartTitleText{text-anchor:middle;font-size:18px;fill:#172b4d;}#diagram3 :root{--mermaid-font-family:"trebuchet ms",verdana,arial,sans-serif;}</style><g><marker orient="auto" markerHeight="12" markerWidth="12" markerUnits="userSpaceOnUse" refY="5" refX="6" viewBox="0 0 10 10" class="marker flowchart" id="diagram3_flowchart-pointEnd"><path style="stroke-width: 1; stroke-dasharray: 1, 0;" class="arrowMarkerPath" d="M 0 0 L 10 5 L 0 10 z"></path></marker><marker orient="auto" markerHeight="12" markerWidth="12" markerUnits="userSpaceOnUse" refY="5" refX="4.5" viewBox="0 0 10 10" class="marker flowchart" id="diagram3_flowchart-pointStart"><path style="stroke-width: 1; stroke-dasharray: 1, 0;" class="arrowMarkerPath" d="M 0 5 L 10 10 L 10 0 z"></path></marker><marker orient="auto" markerHeight="11" markerWidth="11" markerUnits="userSpaceOnUse" refY="5" refX="11" viewBox="0 0 10 10" class="marker flowchart" id="diagram3_flowchart-circleEnd"><circle style="stroke-width: 1; stroke-dasharray: 1, 0;" class="arrowMarkerPath" r="5" cy="5" cx="5"></circle></marker><marker orient="auto" markerHeight="11" markerWidth="11" markerUnits="userSpaceOnUse" refY="5" refX="-1" viewBox="0 0 10 10" class="marker flowchart" id="diagram3_flowchart-circleStart"><circle style="stroke-width: 1; stroke-dasharray: 1, 0;" class="arrowMarkerPath" r="5" cy="5" cx="5"></circle></marker><marker orient="auto" markerHeight="11" markerWidth="11" markerUnits="userSpaceOnUse" refY="5.2" refX="12" viewBox="0 0 11 11" class="marker cross flowchart" id="diagram3_flowchart-crossEnd"><path style="stroke-width: 2; stroke-dasharray: 1, 0;" class="arrowMarkerPath" d="M 1,1 l 9,9 M 10,1 l -9,9"></path></marker><marker orient="auto" markerHeight="11" markerWidth="11" markerUnits="userSpaceOnUse" refY="5.2" refX="-1" viewBox="0 0 11 11" class="marker cross flowchart" id="diagram3_flowchart-crossStart"><path style="stroke-width: 2; stroke-dasharray: 1, 0;" class="arrowMarkerPath" d="M 1,1 l 9,9 M 10,1 l -9,9"></path></marker><g class="root"><g class="clusters"></g><g class="edgePaths"><path marker-end="url(#diagram3_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-P LE-R" id="L-P-R-0" d="M419.948,37L419.948,40.167C419.948,43.333,419.948,49.667,419.948,55.117C419.948,60.567,419.948,65.133,419.948,67.417L419.948,69.7"></path><path marker-end="url(#diagram3_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-R LE-PROG" id="L-R-PROG-0" d="M329.557,103.268L286.784,107.89C244.011,112.512,158.464,121.756,115.691,128.661C72.917,135.567,72.917,140.133,72.917,142.417L72.917,144.7"></path><path marker-end="url(#diagram3_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-R LE-WAIT" id="L-R-WAIT-0" d="M331.794,112L316.704,115.167C301.615,118.333,271.436,124.667,256.346,130.117C241.257,135.567,241.257,140.133,241.257,142.417L241.257,144.7"></path><path marker-end="url(#diagram3_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-R LE-ASK" id="L-R-ASK-0" d="M419.948,112L419.948,115.167C419.948,118.333,419.948,124.667,419.948,130.117C419.948,135.567,419.948,140.133,419.948,142.417L419.948,144.7"></path><path marker-end="url(#diagram3_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-R LE-READY" id="L-R-READY-0" d="M510.339,107.946L534.381,111.788C558.423,115.631,606.508,123.315,630.55,129.441C654.592,135.567,654.592,140.133,654.592,142.417L654.592,144.7"></path><path marker-end="url(#diagram3_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-R LE-FAIL" id="L-R-FAIL-0" d="M472.868,112L481.926,115.167C490.984,118.333,509.101,124.667,518.159,134.083C527.217,143.5,527.217,156,527.217,168.5C527.217,181,527.217,193.5,527.217,220.146C527.217,246.792,527.217,287.583,527.217,330.208C527.217,372.833,527.217,417.292,527.217,447.604C527.217,477.917,527.217,494.083,527.217,508.417C527.217,522.75,527.217,535.25,527.217,547.75C527.217,560.25,527.217,572.75,527.217,585.25C527.217,597.75,527.217,610.25,527.217,618.783C527.217,627.317,527.217,631.883,527.217,634.167L527.217,636.45"></path><path marker-end="url(#diagram3_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-ASK LE-PERSON" id="L-ASK-PERSON-0" d="M419.948,187L419.948,190.167C419.948,193.333,419.948,199.667,419.948,219.263C419.948,238.858,419.948,271.717,419.948,288.146L419.948,304.575"></path><path marker-end="url(#diagram3_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-FAIL LE-HOLD" id="L-FAIL-HOLD-0" d="M527.217,678.75L527.217,681.917C527.217,685.083,527.217,691.417,527.217,696.867C527.217,702.317,527.217,706.883,527.217,709.167L527.217,711.45"></path><path marker-end="url(#diagram3_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-READY LE-PR" id="L-READY-PR-0" d="M654.592,187L654.592,190.167C654.592,193.333,654.592,199.667,654.653,205.2C654.714,210.734,654.835,215.468,654.896,217.835L654.956,220.202"></path><path marker-end="url(#diagram3_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-PR LE-REVIEW" id="L-PR-REVIEW-0" d="M715.725,371.617L737.07,386.639C758.415,401.661,801.104,431.706,822.449,450.845C843.794,469.983,843.794,478.217,843.794,482.333L843.794,486.45"></path><path marker-end="url(#diagram3_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-PR LE-END" id="L-PR-END-0" d="M645.904,423.061L645.183,429.51C644.463,435.958,643.022,448.854,642.301,459.419C641.581,469.983,641.581,478.217,641.581,482.333L641.581,486.45"></path><path marker-end="url(#diagram3_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-REVIEW LE-CLOSE" id="L-REVIEW-CLOSE-0" d="M843.794,528.75L843.794,531.917C843.794,535.083,843.794,541.417,843.794,546.867C843.794,552.317,843.794,556.883,843.794,559.167L843.794,561.45"></path><path marker-end="url(#diagram3_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-CLOSE LE-CHECK" id="L-CLOSE-CHECK-0" d="M843.794,603.75L843.794,606.917C843.794,610.083,843.794,616.417,843.794,621.867C843.794,627.317,843.794,631.883,843.794,634.167L843.794,636.45"></path><path marker-end="url(#diagram3_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-CHECK LE-DONE" id="L-CHECK-DONE-0" d="M843.794,678.75L843.794,681.917C843.794,685.083,843.794,691.417,843.794,696.867C843.794,702.317,843.794,706.883,843.794,709.167L843.794,711.45"></path><path marker-end="url(#diagram3_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-HOLD LE-NEW" id="L-HOLD-NEW-0" d="M527.217,753.75L527.217,758.75C527.217,763.75,527.217,773.75,529.629,782.982C532.04,792.215,536.862,800.68,539.273,804.912L541.685,809.145"></path><path marker-end="url(#diagram3_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-DONE LE-NEW" id="L-DONE-NEW-0" d="M843.794,753.75L843.794,758.75C843.794,763.75,843.794,773.75,814.877,783.604C785.96,793.458,728.125,803.165,699.208,808.019L670.291,812.873"></path><path marker-end="url(#diagram3_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-STOP LE-STOPPED" id="L-STOP-STOPPED-0" d="M668.252,37L668.252,40.167C668.252,43.333,668.252,49.667,668.252,55.117C668.252,60.567,668.252,65.133,668.252,67.417L668.252,69.7"></path></g><g class="edgeLabels"><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g transform="translate(843.7939453125, 461.75)" class="edgeLabel"><g transform="translate(-9, -11)" class="label"><rect height="22.000396728515625" width="18.000324249267578" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">有</tspan></text></g></g><g transform="translate(641.58056640625, 461.75)" class="edgeLabel"><g transform="translate(-9, -11)" class="label"><rect height="22.000396728515625" width="18.000324249267578" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">无</tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g transform="translate(527.21728515625, 783.75)" class="edgeLabel"><g transform="translate(-19.729736328125, -11)" class="label"><rect height="22.000396728515625" width="39.44280242919922" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">retry</tspan></text></g></g><g transform="translate(843.7939453125, 783.75)" class="edgeLabel"><g transform="translate(-85.5, -11)" class="label"><rect height="22.000396728515625" width="170.91299438476562" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">人工后续且授权仍有效</tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g></g><g class="nodes"><g transform="translate(419.947998046875, 18.5)" data-id="P" data-node="true" id="flowchart-P-173" class="node default default flowchart-label"><rect height="37" width="184.71875" y="-18.5" x="-92.359375" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">Assignment pending</tspan></text></g></g><g transform="translate(419.947998046875, 93.5)" data-id="R" data-node="true" id="flowchart-R-174" class="node default default flowchart-label"><rect height="37" width="180.78125" y="-18.5" x="-90.390625" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">Assignment running</tspan></text></g></g><g transform="translate(72.91748046875, 168.5)" data-id="PROG" data-node="true" id="flowchart-PROG-176" class="node default default flowchart-label"><rect height="37" width="145.8349609375" y="-18.5" x="-72.91748046875" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">Report progress</tspan></text></g></g><g transform="translate(241.2568359375, 168.5)" data-id="WAIT" data-node="true" id="flowchart-WAIT-178" class="node default default flowchart-label"><rect height="37" width="134.84375" y="-18.5" x="-67.421875" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">Report waiting</tspan></text></g></g><g transform="translate(419.947998046875, 168.5)" data-id="ASK" data-node="true" id="flowchart-ASK-180" class="node default default flowchart-label"><rect height="37" width="166.53857421875" y="-18.5" x="-83.269287109375" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">Attention 具体问题</tspan></text></g></g><g transform="translate(654.59228515625, 168.5)" data-id="READY" data-node="true" id="flowchart-READY-182" class="node default default flowchart-label"><rect height="37" width="121.44677734375" y="-18.5" x="-60.723388671875" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">Report ready</tspan></text></g></g><g transform="translate(527.21728515625, 660.25)" data-id="FAIL" data-node="true" id="flowchart-FAIL-184" class="node default default flowchart-label"><rect height="37" width="201.59375" y="-18.5" x="-100.796875" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">Report blocked / failed</tspan></text></g></g><g transform="translate(419.947998046875, 328.375)" data-id="PERSON" data-node="true" id="flowchart-PERSON-186" class="node default default flowchart-label"><rect height="37" width="153" y="-18.5" x="-76.5" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">展示为等待人回答</tspan></text></g></g><g transform="translate(527.21728515625, 735.25)" data-id="HOLD" data-node="true" id="flowchart-HOLD-188" class="node default default flowchart-label"><rect height="37" width="225.0302734375" y="-18.5" x="-112.51513671875" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">自动输入不唤醒 人工可恢复</tspan></text></g></g><g transform="translate(654.59228515625, 328.375)" data-id="PR" data-node="true" id="flowchart-PR-190" class="node default default flowchart-label"><polygon style="" transform="translate(-103.375,103.375)" class="label-container" points="103.375,0 206.75,-103.375 103.375,-206.75 0,-103.375"></polygon><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">有待结束的关联 PR?</tspan></text></g></g><g transform="translate(843.7939453125, 510.25)" data-id="REVIEW" data-node="true" id="flowchart-REVIEW-192" class="node default default flowchart-label"><rect height="37" width="193.7236328125" y="-18.5" x="-96.86181640625" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">等待审阅 Ticket 仍打开</tspan></text></g></g><g transform="translate(641.58056640625, 510.25)" data-id="END" data-node="true" id="flowchart-END-194" class="node default default flowchart-label"><rect height="37" width="154.703125" y="-18.5" x="-77.3515625" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">Ticket completed</tspan></text></g></g><g transform="translate(843.7939453125, 585.25)" data-id="CLOSE" data-node="true" id="flowchart-CLOSE-196" class="node default default flowchart-label"><rect height="37" width="174.328125" y="-18.5" x="-87.1640625" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">PR merged / closed</tspan></text></g></g><g transform="translate(843.7939453125, 660.25)" data-id="CHECK" data-node="true" id="flowchart-CHECK-198" class="node default default flowchart-label"><rect height="37" width="238" y="-18.5" x="-119" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">核对是否仍有未完成后续工作</tspan></text></g></g><g transform="translate(843.7939453125, 735.25)" data-id="DONE" data-node="true" id="flowchart-DONE-200" class="node default default flowchart-label"><rect height="37" width="119.21875" y="-18.5" x="-59.609375" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">Ticket ended</tspan></text></g></g><g transform="translate(554.84765625, 832.25)" data-id="NEW" data-node="true" id="flowchart-NEW-202" class="node default default flowchart-label"><rect height="37" width="226.37744140625" y="-18.5" x="-113.188720703125" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">新 Assignment 同一 Ticket</tspan></text></g></g><g transform="translate(668.252197265625, 18.5)" data-id="STOP" data-node="true" id="flowchart-STOP-205" class="node default default flowchart-label"><rect height="37" width="89.8994140625" y="-18.5" x="-44.94970703125" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">人工 stop</tspan></text></g></g><g transform="translate(668.252197265625, 93.5)" data-id="STOPPED" data-node="true" id="flowchart-STOPPED-206" class="node default default flowchart-label"><rect height="37" width="259.8271484375" y="-18.5" x="-129.91357421875" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">Ticket stopped 普通输入不恢复</tspan></text></g></g></g></g></g></svg><figcaption>图 4 · 浏览器缩放可查看细节</figcaption></figure>
+<table>
+<thead>
+<tr>
+<th>状态层</th>
+<th>示例</th>
+<th>语义</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Assignment</td>
+<td>pending、running、ended</td>
+<td>本次执行绑定是否开始或结束</td>
+</tr>
+<tr>
+<td>Report</td>
+<td>progress、waiting、ready、blocked、failed、dropped</td>
+<td>执行器最近报告了什么</td>
+</tr>
+<tr>
+<td>Ticket outcome</td>
+<td>completed、merged、closed、dropped、stopped</td>
+<td>整件任务如何结束</td>
+</tr>
+<tr>
+<td>展示阶段</td>
+<td>working、queued、idle、person、ended</td>
+<td>当前主要在等待谁或什么</td>
+</tr>
+</tbody></table>
+<p><code>ticketStage</code> 按优先级派生展示阶段：已结束、输入交付失败、人工问题、待审阅、阻塞或失败、排队、空闲、工作中。它不是要求模型再维护一份随时可能矛盾的独立状态。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/core/stage.ts#L9">阶段派生实现</a></p>
+<p><code>ready</code> 且有关联开放 PR 时通常意味着等待审阅；PR 关闭或合并后，还要检查是否存在尚未完成的后续工作。没有关联 PR 的 ready 可以直接完成任务。<strong>打开 PR、本轮执行结束、可以审阅和任务最终结束是不同事实。</strong><a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/core/assignments.ts">S07</a></p>
+<h2 id="section-15">9 可靠性最关键的五个实现</h2>
+<h3 id="section-16">9.1 先记录副作用 再执行副作用</h3>
+<p>Engine 的同步命令在事务内修改任务并写入待办 Effect；真正启动会话、投递输入或发送消息在事务提交后发生。领域记录回滚时，对应待办也回滚。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/app/effects.ts">S03</a></p>
+<p><code>Effects</code> 以 kind 与 key 合并待办，保留排序位置，用 generation 区分新旧内容。执行期间若出现新版待办，旧尝试结束时不能删除新版记录。它解决的不只是失败后重试，还有“执行期间收到更新”的竞态。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/app/effects.ts">S12</a></p>
+<p><code>Store.afterCommit</code> 用于不要求跨重启保留的内存动作；要求恢复后继续执行的动作进入持久化 Effects。两者不能互相替代。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/app/store.ts">S13</a></p>
+<h3 id="section-17">9.2 投递成功与模型读取分开</h3>
+<p><code>AgentDelivery</code> 从持久会话历史、内存事件和收件箱判断同一 requestId 是否已投递，并在回执前刷新会话持久化。Ticket 的输入还记录 <code>readAt</code> 与 <code>deliveredTo</code>，恢复时把已投递但未读的消息重新排队，并去除收件箱里可能残留的副本。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/core/assignments.ts">S09</a></p>
+<p>这避免“消息已经排入队列”被误认为“模型已经处理完”。它仍不能证明模型真正理解或执行了每条输入。</p>
+<h3 id="section-18">9.3 不重复处理人工后续消息</h3>
+<p>订阅线程的人工后续默认留给已有 Worker。主会话收到提示，但除人工要求停止外不能再次替它路由；Worker 认为超范围时 handback，待没有其他任务仍拥有该消息后，才进入新评估。仅供上下文的订阅不建立这类所有权。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/core/intake.ts">S02</a><a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/core/tickets.ts">S07</a></p>
+<p>这比“每条新评论都让 Router 再想一次”更能避免重复开工。按主题相似度猜测归属仍可能错误，因此提示词要求附加任务时依据明确引用，而不是仅凭话题相似。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/docs/004-prompts.md">S15</a></p>
+<h3 id="section-19">9.4 重试按失败类型处理</h3>
+<table>
+<thead>
+<tr>
+<th>失败或等待</th>
+<th>处理方式</th>
+<th>不应误读为</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Eval 超时</td>
+<td>从候选投递后计时；允许两次重排，第三次过期记不可用</td>
+<td>排队时间也算模型评估超时</td>
+</tr>
+<tr>
+<td>暂时网络或模型供应商错误</td>
+<td>有限次重试并退避</td>
+<td>业务错误也自动反复重做</td>
+</tr>
+<tr>
+<td>prepare 命令失败</td>
+<td>报失败，保留非空残留目录，等待人工输入或 retry</td>
+<td>自动重跑一切初始化命令</td>
+</tr>
+<tr>
+<td>输入或通知 Effect 失败</td>
+<td>持久队列退避重试</td>
+<td>连续三次失败就必定停止重试</td>
+</tr>
+<tr>
+<td>Effect 同类累计失败</td>
+<td>达阈值后在健康状态中暴露</td>
+<td>健康告警阈值等于重试次数上限</td>
+</tr>
+<tr>
+<td>blocked 或 failed</td>
+<td>自动输入不继续唤醒；人工输入或 retry 可解除等待</td>
+<td>所有工具都锁死，人工也不能继续</td>
+</tr>
+<tr>
+<td>处理暂停</td>
+<td>暂缓新派发、相关交付与发送，评估期限相应移动</td>
+<td>立即终止所有已运行程序</td>
+</tr>
+<tr>
+<td>人工停止 Ticket</td>
+<td>结束执行，普通后续输入不恢复该 Ticket</td>
+<td>与暂停处理或暂时失败相同</td>
+</tr>
+</tbody></table>
+<p>上述区分分别由 Evals、Effects、Tickets 和 DshExecutor 实现；不能把它们简化成一个“最多重试三次”的总规则。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/core/tickets.ts">S06</a><a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/app/effects.ts">S08</a></p>
+<h3 id="section-20">9.5 恢复要先核对现实世界</h3>
+<p>启动时，执行器区分运行中断、已有稳定报告和待启动 Assignment。需要恢复的任务保留 Ticket、目录与会话，并收到明确提示：先检查工作区、Git 历史和 GitHub 状态，避免重复已完成的外部操作。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/core/assignments.ts">S08</a></p>
+<p>内部队列可实现按键去重；GitHub 评论通过正文中的稳定标记减轻“远端已发送、本地未记回执”的重复。任意 shell 命令、提交、PR 创建和远端系统不因此获得通用的 exactly-once 保证。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/sources/github-channel.ts">S18</a></p>
+<h2 id="section-21">10 哪些由代码保证 哪些仍依赖模型</h2>
+<table>
+<thead>
+<tr>
+<th>事项</th>
+<th>实现方式</th>
+<th>能力边界</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>身份与准入</td>
+<td>Policy、Source 元数据、参数校验</td>
+<td>依赖适配器正确识别来源</td>
+</tr>
+<tr>
+<td>策略版本与恢复授权</td>
+<td>Mandate、版本检查、revalidate</td>
+<td>活跃任务收到策略变化，不等于立即全部取消</td>
+</tr>
+<tr>
+<td>任务结束后工具不可继续使用</td>
+<td>Session 工具 guard</td>
+<td>不是操作系统级沙箱</td>
+</tr>
+<tr>
+<td>稳定输入与任务去重</td>
+<td>Trigger ID、Decision、AgentDelivery</td>
+<td>不保证模型判断始终正确</td>
+</tr>
+<tr>
+<td>事务和待办队列</td>
+<td>Store、Effects、Outbox</td>
+<td>不自动回滚已经发生的远端行为</td>
+</tr>
+<tr>
+<td>合理实施范围与充分验证</td>
+<td>任务提示词、仓库规则、Worker 判断</td>
+<td>不能仅凭 Report 宣告质量成立</td>
+</tr>
+<tr>
+<td>安静且有用的沟通</td>
+<td>回复目的校验、报告转发规则、沟通提示词</td>
+<td>消息具体内容仍由模型生成</td>
+</tr>
+<tr>
+<td>Worker 工作目录</td>
+<td>单任务目录，可配置 worktree</td>
+<td>不隔离操作系统用户、网络或主目录</td>
+</tr>
+</tbody></table>
+<p>部署文档和 <code>Sessions.ensure</code> 明确使用 <code>danger-full-access</code>。命令包装器选择账号，不构成进程隔离。迁移到 RelayForge 时，应保留宿主权限与仓库授权，不复制这一权限预设。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/docs/006-deployment.md">S14</a></p>
+<p>还有两点不宜照搬：主会话不等待成立于 Harness 自动唤醒和持久队列；其他宿主没有这些能力时，直接结束回合可能丢失跟进。内部进度不外发也应适配宿主要求的进度更新，而不是让用户在长任务中失去状态。</p>
+<h2 id="section-22">11 RelayForge 当前工作流</h2>
+<figure class="diagram" id="figure-5"><svg aria-roledescription="flowchart-v2" role="graphics-document document" viewBox="-8 -8 854.2294921875 1490.56787109375" style="max-width: 854.2294921875px;" xmlns="http://www.w3.org/2000/svg" width="100%" id="diagram4"><style>#diagram4{font-family:Microsoft YaHei,Arial,sans-serif;font-size:17px;fill:#172b4d;}#diagram4 .error-icon{fill:#f5f6f8;}#diagram4 .error-text{fill:#0a0907;stroke:#0a0907;}#diagram4 .edge-thickness-normal{stroke-width:2px;}#diagram4 .edge-thickness-thick{stroke-width:3.5px;}#diagram4 .edge-pattern-solid{stroke-dasharray:0;}#diagram4 .edge-pattern-dashed{stroke-dasharray:3;}#diagram4 .edge-pattern-dotted{stroke-dasharray:2;}#diagram4 .marker{fill:#63758c;stroke:#63758c;}#diagram4 .marker.cross{stroke:#63758c;}#diagram4 svg{font-family:Microsoft YaHei,Arial,sans-serif;font-size:17px;}#diagram4 .label{font-family:Microsoft YaHei,Arial,sans-serif;color:#172b4d;}#diagram4 .cluster-label text{fill:#0a0907;}#diagram4 .cluster-label span,#diagram4 p{color:#0a0907;}#diagram4 .label text,#diagram4 span,#diagram4 p{fill:#172b4d;color:#172b4d;}#diagram4 .node rect,#diagram4 .node circle,#diagram4 .node ellipse,#diagram4 .node polygon,#diagram4 .node path{fill:#eaf1ff;stroke:#7894c1;stroke-width:1px;}#diagram4 .flowchart-label text{text-anchor:middle;}#diagram4 .node .katex path{fill:#000;stroke:#000;stroke-width:1px;}#diagram4 .node .label{text-align:center;}#diagram4 .node.clickable{cursor:pointer;}#diagram4 .arrowheadPath{fill:#0b0b0b;}#diagram4 .edgePath .path{stroke:#63758c;stroke-width:2.0px;}#diagram4 .flowchart-link{stroke:#63758c;fill:none;}#diagram4 .edgeLabel{background-color:#edf6f3;text-align:center;}#diagram4 .edgeLabel rect{opacity:0.5;background-color:#edf6f3;fill:#edf6f3;}#diagram4 .labelBkg{background-color:rgba(237, 246, 243, 0.5);}#diagram4 .cluster rect{fill:#f5f6f8;stroke:hsl(220, 0%, 86.6666666667%);stroke-width:1px;}#diagram4 .cluster text{fill:#0a0907;}#diagram4 .cluster span,#diagram4 p{color:#0a0907;}#diagram4 div.mermaidTooltip{position:absolute;text-align:center;max-width:200px;padding:2px;font-family:Microsoft YaHei,Arial,sans-serif;font-size:12px;background:#f5f6f8;border:1px solid hsl(220, 0%, 86.6666666667%);border-radius:2px;pointer-events:none;z-index:100;}#diagram4 .flowchartTitleText{text-anchor:middle;font-size:18px;fill:#172b4d;}#diagram4 :root{--mermaid-font-family:"trebuchet ms",verdana,arial,sans-serif;}</style><g><marker orient="auto" markerHeight="12" markerWidth="12" markerUnits="userSpaceOnUse" refY="5" refX="6" viewBox="0 0 10 10" class="marker flowchart" id="diagram4_flowchart-pointEnd"><path style="stroke-width: 1; stroke-dasharray: 1, 0;" class="arrowMarkerPath" d="M 0 0 L 10 5 L 0 10 z"></path></marker><marker orient="auto" markerHeight="12" markerWidth="12" markerUnits="userSpaceOnUse" refY="5" refX="4.5" viewBox="0 0 10 10" class="marker flowchart" id="diagram4_flowchart-pointStart"><path style="stroke-width: 1; stroke-dasharray: 1, 0;" class="arrowMarkerPath" d="M 0 5 L 10 10 L 10 0 z"></path></marker><marker orient="auto" markerHeight="11" markerWidth="11" markerUnits="userSpaceOnUse" refY="5" refX="11" viewBox="0 0 10 10" class="marker flowchart" id="diagram4_flowchart-circleEnd"><circle style="stroke-width: 1; stroke-dasharray: 1, 0;" class="arrowMarkerPath" r="5" cy="5" cx="5"></circle></marker><marker orient="auto" markerHeight="11" markerWidth="11" markerUnits="userSpaceOnUse" refY="5" refX="-1" viewBox="0 0 10 10" class="marker flowchart" id="diagram4_flowchart-circleStart"><circle style="stroke-width: 1; stroke-dasharray: 1, 0;" class="arrowMarkerPath" r="5" cy="5" cx="5"></circle></marker><marker orient="auto" markerHeight="11" markerWidth="11" markerUnits="userSpaceOnUse" refY="5.2" refX="12" viewBox="0 0 11 11" class="marker cross flowchart" id="diagram4_flowchart-crossEnd"><path style="stroke-width: 2; stroke-dasharray: 1, 0;" class="arrowMarkerPath" d="M 1,1 l 9,9 M 10,1 l -9,9"></path></marker><marker orient="auto" markerHeight="11" markerWidth="11" markerUnits="userSpaceOnUse" refY="5.2" refX="-1" viewBox="0 0 11 11" class="marker cross flowchart" id="diagram4_flowchart-crossStart"><path style="stroke-width: 2; stroke-dasharray: 1, 0;" class="arrowMarkerPath" d="M 1,1 l 9,9 M 10,1 l -9,9"></path></marker><g class="root"><g class="clusters"></g><g class="edgePaths"><path marker-end="url(#diagram4_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-U LE-ROUTE" id="L-U-ROUTE-0" d="M326.296,37L311.994,42C297.691,47,269.085,57,254.783,66.117C240.48,75.233,240.48,83.467,240.48,87.583L240.48,91.7"></path><path marker-end="url(#diagram4_flowchart-pointEnd)" style="fill:none;stroke-width:2px;stroke-dasharray:3;" class="edge-thickness-normal edge-pattern-dotted flowchart-link LS-U LE-OPT" id="L-U-OPT-0" d="M432.137,37L446.44,42C460.743,47,489.348,57,503.651,66.117C517.954,75.233,517.954,83.467,517.954,87.583L517.954,91.7"></path><path marker-end="url(#diagram4_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-ROUTE LE-SIZE" id="L-ROUTE-SIZE-0" d="M240.48,134L240.48,137.167C240.48,140.333,240.48,146.667,240.54,152.2C240.601,157.734,240.723,162.468,240.783,164.835L240.844,167.202"></path><path marker-end="url(#diagram4_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-SIZE LE-INLINE" id="L-SIZE-INLINE-0" d="M182.274,365.144L169.231,379.845C156.188,394.546,130.102,423.947,117.058,446.732C104.015,469.516,104.015,485.682,104.015,500.016C104.015,514.349,104.015,526.849,104.015,539.349C104.015,551.849,104.015,564.349,104.015,576.849C104.015,589.349,104.015,601.849,104.015,627.701C104.015,653.552,104.015,692.755,104.015,733.792C104.015,774.828,104.015,817.698,104.015,847.216C104.015,876.735,104.015,892.901,104.015,907.235C104.015,921.568,104.015,934.068,104.015,946.568C104.015,959.068,104.015,971.568,104.015,984.068C104.015,996.568,104.015,1009.068,104.015,1017.601C104.015,1026.135,104.015,1030.701,104.015,1032.985L104.015,1035.268"></path><path marker-end="url(#diagram4_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-SIZE LE-DEV" id="L-SIZE-DEV-0" d="M224.874,407.744L223.661,415.345C222.449,422.945,220.023,438.147,218.81,453.832C217.597,469.516,217.597,485.682,217.597,500.016C217.597,514.349,217.597,526.849,230.939,536.074C244.282,545.298,270.966,551.247,284.308,554.221L297.65,557.196"></path><path marker-end="url(#diagram4_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-SIZE LE-PLAN" id="L-SIZE-PLAN-0" d="M317.415,347.414L344.869,365.07C372.323,382.726,427.23,418.037,454.684,439.81C482.138,461.582,482.138,469.816,482.138,473.932L482.138,478.049"></path><path marker-end="url(#diagram4_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-PLAN LE-DEV" id="L-PLAN-DEV-0" d="M482.138,520.349L482.138,523.516C482.138,526.682,482.138,533.016,474.826,539.029C467.515,545.042,452.892,550.734,445.581,553.58L438.269,556.426"></path><path marker-end="url(#diagram4_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-DEV LE-CONTRACT" id="L-DEV-CONTRACT-0" d="M532.557,592.509L566.669,596.149C600.781,599.789,669.005,607.069,703.117,630.311C737.229,653.552,737.229,692.755,737.229,733.792C737.229,774.828,737.229,817.698,737.229,847.216C737.229,876.735,737.229,892.901,737.229,907.235C737.229,921.568,737.229,934.068,737.229,942.601C737.229,951.135,737.229,955.701,737.229,957.985L737.229,960.268"></path><path marker-end="url(#diagram4_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-DEV LE-PAR" id="L-DEV-PAR-0" d="M342.315,595.349L334.871,598.516C327.426,601.682,312.537,608.016,305.153,613.549C297.769,619.083,297.89,623.817,297.951,626.184L298.012,628.551"></path><path marker-end="url(#diagram4_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-PAR LE-SEQ" id="L-PAR-SEQ-0" d="M360.191,769.025L386.137,784.282C412.082,799.539,463.973,830.053,489.919,853.394C515.865,876.735,515.865,892.901,515.865,907.235C515.865,921.568,515.865,934.068,515.865,942.601C515.865,951.135,515.865,955.701,515.865,957.985L515.865,960.268"></path><path marker-end="url(#diagram4_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-PAR LE-WT" id="L-PAR-WT-0" d="M278.72,811.64L276.616,819.795C274.511,827.95,270.302,844.259,268.198,856.53C266.093,868.801,266.093,877.035,266.093,881.151L266.093,885.268"></path><path marker-end="url(#diagram4_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-WT LE-PATCH" id="L-WT-PATCH-0" d="M266.093,927.568L266.093,930.735C266.093,933.901,266.093,940.235,266.093,945.685C266.093,951.135,266.093,955.701,266.093,957.985L266.093,960.268"></path><path marker-end="url(#diagram4_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-PATCH LE-VERIFY" id="L-PATCH-VERIFY-0" d="M266.093,1002.568L266.093,1005.735C266.093,1008.901,266.093,1015.235,278.445,1021.362C290.796,1027.489,315.499,1033.411,327.851,1036.372L340.202,1039.332"></path><path marker-end="url(#diagram4_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-SEQ LE-VERIFY" id="L-SEQ-VERIFY-0" d="M515.865,1002.568L515.865,1005.735C515.865,1008.901,515.865,1015.235,508.803,1021.239C501.741,1027.243,487.618,1032.917,480.556,1035.755L473.495,1038.592"></path><path marker-end="url(#diagram4_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-CONTRACT LE-VERIFY" id="L-CONTRACT-VERIFY-0" d="M737.229,1002.568L737.229,1005.735C737.229,1008.901,737.229,1015.235,699.741,1022.868C662.252,1030.502,587.274,1039.437,549.785,1043.904L512.296,1048.372"></path><path marker-end="url(#diagram4_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-INLINE LE-FIN" id="L-INLINE-FIN-0" d="M104.015,1077.568L104.015,1080.735C104.015,1083.901,104.015,1090.235,108.564,1096.115C113.113,1101.996,122.211,1107.424,126.76,1110.138L131.309,1112.852"></path><path marker-end="url(#diagram4_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-VERIFY LE-FIN" id="L-VERIFY-FIN-0" d="M422.533,1077.568L422.533,1080.735C422.533,1083.901,422.533,1090.235,397.48,1097.076C372.426,1103.917,322.319,1111.267,297.265,1114.942L272.211,1118.616"></path><path marker-end="url(#diagram4_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-FIN LE-REV" id="L-FIN-REV-0" d="M166.867,1152.568L166.867,1155.735C166.867,1158.901,166.867,1165.235,166.867,1170.685C166.867,1176.135,166.867,1180.701,166.867,1182.985L166.867,1185.268"></path><path marker-end="url(#diagram4_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-REV LE-AUTH" id="L-REV-AUTH-0" d="M166.867,1227.568L166.867,1230.735C166.867,1233.901,166.867,1240.235,166.867,1245.685C166.867,1251.135,166.867,1255.701,166.867,1257.985L166.867,1260.268"></path><path marker-end="url(#diagram4_flowchart-pointEnd)" style="fill:none;" class="edge-thickness-normal edge-pattern-solid flowchart-link LS-AUTH LE-RESULT" id="L-AUTH-RESULT-0" d="M166.867,1302.568L166.867,1305.735C166.867,1308.901,166.867,1315.235,166.867,1320.685C166.867,1326.135,166.867,1330.701,166.867,1332.985L166.867,1335.268"></path><path marker-end="url(#diagram4_flowchart-pointEnd)" style="fill:none;stroke-width:2px;stroke-dasharray:3;" class="edge-thickness-normal edge-pattern-dotted flowchart-link LS-RESULT LE-LOG" id="L-RESULT-LOG-0" d="M142.893,1377.568L136.413,1382.568C129.933,1387.568,116.974,1397.568,110.495,1406.685C104.015,1415.801,104.015,1424.035,104.015,1428.151L104.015,1432.268"></path><path marker-end="url(#diagram4_flowchart-pointEnd)" style="fill:none;stroke-width:2px;stroke-dasharray:3;" class="edge-thickness-normal edge-pattern-dotted flowchart-link LS-RESULT LE-BENCH" id="L-RESULT-BENCH-0" d="M217.866,1377.568L231.649,1382.568C245.433,1387.568,273,1397.568,286.783,1406.685C300.567,1415.801,300.567,1424.035,300.567,1428.151L300.567,1432.268"></path></g><g class="edgeLabels"><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g transform="translate(517.95361328125, 67)" class="edgeLabel"><g transform="translate(-59.5, -11)" class="label"><rect height="22.000308990478516" width="118.94161224365234" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">可直接选择技能</tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g transform="translate(104.01513671875, 731.95849609375)" class="edgeLabel"><g transform="translate(-23.689208984375, -11)" class="label"><rect height="22.000308990478516" width="47.3570671081543" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">Quick</tspan></text></g></g><g transform="translate(217.59716796875, 501.84912109375)" class="edgeLabel"><g transform="translate(-36.4140625, -11)" class="label"><rect height="22.000308990478516" width="72.78227233886719" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">Standard</tspan></text></g></g><g transform="translate(482.1376953125, 453.34912109375)" class="edgeLabel"><g transform="translate(-22.62255859375, -11)" class="label"><rect height="22.000308990478516" width="45.224971771240234" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">Large</tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g transform="translate(515.864501953125, 909.06787109375)" class="edgeLabel"><g transform="translate(-8.5, -11)" class="label"><rect height="22.000308990478516" width="17.0002384185791" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">否</tspan></text></g></g><g transform="translate(266.09326171875, 860.56787109375)" class="edgeLabel"><g transform="translate(-9.5, -11)" class="label"><rect height="22.000308990478516" width="19.000267028808594" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">是</tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g class="edgeLabel"><g transform="translate(0, 0)" class="label"><rect height="0" width="0" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve"></tspan></text></g></g><g transform="translate(104.01513671875, 1407.56787109375)" class="edgeLabel"><g transform="translate(-58.89697265625, -11)" class="label"><rect height="22.000308990478516" width="117.73213958740234" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">可选宿主 Hook</tspan></text></g></g><g transform="translate(300.56689453125, 1407.56787109375)" class="edgeLabel"><g transform="translate(-77, -11)" class="label"><rect height="22.000308990478516" width="153.92208862304688" ry="0" rx="0"></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">单独配对执行与验收</tspan></text></g></g></g><g class="nodes"><g transform="translate(379.2166748046875, 18.5)" data-id="U" data-node="true" id="flowchart-U-251" class="node default default flowchart-label"><rect height="37" width="203" y="-18.5" x="-101.5" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">用户请求与宿主技能选择</tspan></text></g></g><g transform="translate(240.479736328125, 115.5)" data-id="ROUTE" data-node="true" id="flowchart-ROUTE-252" class="node default default flowchart-label"><rect height="37" width="294.94775390625" y="-18.5" x="-147.473876953125" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">task-router 检查意图 范围 依赖 风险</tspan></text></g></g><g transform="translate(517.95361328125, 115.5)" data-id="OPT" data-node="true" id="flowchart-OPT-254" class="node default default flowchart-label"><rect height="37" width="204" y="-18.5" x="-102" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">领域技能或可选上游流程</tspan></text></g></g><g transform="translate(240.479736328125, 297.674560546875)" data-id="SIZE" data-node="true" id="flowchart-SIZE-256" class="node default default flowchart-label"><polygon style="" transform="translate(-125.674560546875,125.674560546875)" class="label-container" points="125.674560546875,0 251.34912109375,-125.674560546875 125.674560546875,-251.34912109375 0,-125.674560546875"></polygon><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">Quick / Standard / Large</tspan></text></g></g><g transform="translate(104.01513671875, 1059.06787109375)" data-id="INLINE" data-node="true" id="flowchart-INLINE-258" class="node default default flowchart-label"><rect height="37" width="208.0302734375" y="-18.5" x="-104.01513671875" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">当前上下文修改 聚焦检查</tspan></text></g></g><g transform="translate(385.8070068359375, 576.84912109375)" data-id="DEV" data-node="true" id="flowchart-DEV-260" class="node default default flowchart-label"><rect height="37" width="293.5" y="-18.5" x="-146.75" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">development-workflow 单一主写者</tspan></text></g></g><g transform="translate(482.1376953125, 501.84912109375)" data-id="PLAN" data-node="true" id="flowchart-PLAN-262" class="node default default flowchart-label"><rect height="37" width="248.15185546875" y="-18.5" x="-124.075927734375" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">writing-plans 持久计划与依赖</tspan></text></g></g><g transform="translate(737.2294921875, 984.06787109375)" data-id="CONTRACT" data-node="true" id="flowchart-CONTRACT-266" class="node default default flowchart-label"><rect height="37" width="202" y="-18.5" x="-101" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">契约前置条件与纵向切片</tspan></text></g></g><g transform="translate(297.647705078125, 731.95849609375)" data-id="PAR" data-node="true" id="flowchart-PAR-268" class="node default default flowchart-label"><polygon style="" transform="translate(-98.609375,98.609375)" class="label-container" points="98.609375,0 197.21875,-98.609375 98.609375,-197.21875 0,-98.609375"></polygon><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">有实质收益且独立?</tspan></text></g></g><g transform="translate(515.864501953125, 984.06787109375)" data-id="SEQ" data-node="true" id="flowchart-SEQ-270" class="node default default flowchart-label"><rect height="37" width="184.72998046875" y="-18.5" x="-92.364990234375" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">主 checkout 顺序执行</tspan></text></g></g><g transform="translate(266.09326171875, 909.06787109375)" data-id="WT" data-node="true" id="flowchart-WT-272" class="node default default flowchart-label"><rect height="37" width="195.04541015625" y="-18.5" x="-97.522705078125" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">最多两个临时 worktree</tspan></text></g></g><g transform="translate(266.09326171875, 984.06787109375)" data-id="PATCH" data-node="true" id="flowchart-PATCH-274" class="node default default flowchart-label"><rect height="37" width="258.8125" y="-18.5" x="-129.40625" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">export 冻结补丁 integrate 应用</tspan></text></g></g><g transform="translate(422.5333251953125, 1059.06787109375)" data-id="VERIFY" data-node="true" id="flowchart-VERIFY-276" class="node default default flowchart-label"><rect height="37" width="169" y="-18.5" x="-84.5" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">主工作区验证与整合</tspan></text></g></g><g transform="translate(166.866943359375, 1134.06787109375)" data-id="FIN" data-node="true" id="flowchart-FIN-282" class="node default default flowchart-label"><rect height="37" width="200.201171875" y="-18.5" x="-100.1005859375" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">finishing-development</tspan></text></g></g><g transform="translate(166.866943359375, 1209.06787109375)" data-id="REV" data-node="true" id="flowchart-REV-286" class="node default default flowchart-label"><rect height="37" width="209.0302734375" y="-18.5" x="-104.51513671875" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">按风险审查 复用有效证据</tspan></text></g></g><g transform="translate(166.866943359375, 1284.06787109375)" data-id="AUTH" data-node="true" id="flowchart-AUTH-288" class="node default default flowchart-label"><rect height="37" width="242.078125" y="-18.5" x="-121.0390625" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">仅执行已授权 commit / push</tspan></text></g></g><g transform="translate(166.866943359375, 1359.06787109375)" data-id="RESULT" data-node="true" id="flowchart-RESULT-290" class="node default default flowchart-label"><rect height="37" width="235.09375" y="-18.5" x="-117.546875" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">结果 验证范围 缺口 状态声明</tspan></text></g></g><g transform="translate(104.01513671875, 1456.06787109375)" data-id="LOG" data-node="true" id="flowchart-LOG-292" class="node default default flowchart-label"><rect height="37" width="100" y="-18.5" x="-50" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">元数据日志</tspan></text></g></g><g transform="translate(300.56689453125, 1456.06787109375)" data-id="BENCH" data-node="true" id="flowchart-BENCH-294" class="node default default flowchart-label"><rect height="37" width="237.103515625" y="-18.5" x="-118.5517578125" ry="0" rx="0" style="" class="basic label-container"></rect><g transform="translate(0, -11)" style="" class="label"><rect></rect><text style=""><tspan class="row" x="0" dy="1em" xml:space="preserve">独立 benchmark 记录与分析</tspan></text></g></g></g></g></g></svg><figcaption>图 5 · 浏览器缩放可查看细节</figcaption></figure>
+<p>核心入口已经做到按任务复杂度选择流程，风险独立决定验证深度。Standard 默认单写者；Large 仅在任务独立且收益明确时并行。后端契约验证后再开始依赖它的前端工作，未提交但已验证的前置成果可以支持顺序执行。<a href="E:/my-project/relayforge-development/skills/development-workflow/SKILL.md">L02</a><a href="E:/my-project/relayforge-development/skills/writing-plans/SKILL.md">L04</a></p>
+<p>收尾会复用仍有效的检查证据，覆盖已提交与未提交的实际改动，仅按已有授权执行 commit、push。混合 Git 状态下的审查快照辅助脚本也已提供。<a href="E:/my-project/relayforge-development/skills/finishing-development/references/review-surface.md">L05</a></p>
+<p>这些已有机制应保留。SuperAgent 核心没有等价的显式前置任务 DAG 和跨前后端契约验收，不应以它的事件调度替换当前仓库的工程依赖约束。</p>
+<h2 id="section-23">12 能力对照与缺口定位</h2>
+<table>
+<thead>
+<tr>
+<th>能力</th>
+<th>SuperAgent</th>
+<th>RelayForge 当前状态</th>
+<th>判断</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>按需技术调查与验证</td>
+<td>Worker 自主完成</td>
+<td>核心技能已明确</td>
+<td>已具备，继续维持</td>
+</tr>
+<tr>
+<td>按需加载上下文</td>
+<td>角色分工、短卡片、资源分页</td>
+<td>懒加载技能和引用、窄交接</td>
+<td>方向一致，不能由文本长度推断实际 token 节省</td>
+</tr>
+<tr>
+<td>任务与执行尝试分开</td>
+<td>Ticket 与 Assignment</td>
+<td>计划任务、worktree manifest、对话状态分散</td>
+<td>长任务协议缺口</td>
+</tr>
+<tr>
+<td>授权溯源</td>
+<td>Mandate 和策略版本</td>
+<td>交接携带 authorization，缺少统一保存格式</td>
+<td>长期续接时仍依赖模型记忆</td>
+</tr>
+<tr>
+<td>人工暂停与失败区分</td>
+<td>不同状态与恢复路径</td>
+<td>主任务状态以 blocked 等粗粒度表示</td>
+<td>需要明确续接语义</td>
+</tr>
+<tr>
+<td>外部行为恢复核对</td>
+<td>队列、回执、恢复提示</td>
+<td>恢复检查 checkout；完整副作用记录未统一</td>
+<td>按已授权发布场景补齐</td>
+</tr>
+<tr>
+<td>固定执行入口</td>
+<td>领域写入口与工具角色</td>
+<td>由模型选择技能，Router 可被绕过</td>
+<td>不能承诺硬分发</td>
+</tr>
+<tr>
+<td>工程依赖与契约</td>
+<td>非核心 DAG 调度器</td>
+<td>显式依赖和契约验收</td>
+<td>RelayForge 应保留的能力</td>
+</tr>
+<tr>
+<td>异常路径可靠性</td>
+<td>上游有事务、竞态与恢复测试</td>
+<td>本地脚本常规路径测试通过，但发现两项缺陷</td>
+<td>先修局部确定性问题</td>
+</tr>
+<tr>
+<td>实际质量评估</td>
+<td>上游测试覆盖运行时不变量</td>
+<td>有评估协议和分析器；宿主行为场景主要人工执行</td>
+<td>缺少自动执行和独立证据衔接</td>
+</tr>
+</tbody></table>
+<h2 id="section-24">13 当前仓库问题清单</h2>
+<p>优先级含义：P1 应在扩大自动执行或依赖相应能力前处理；P2 属于稳定性、行为一致性和可维护性改进。本次没有证据支持生产事故或 P0 结论。</p>
+<table>
+<thead>
+<tr>
+<th>编号</th>
+<th>优先级</th>
+<th>类型</th>
+<th>问题</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>F01</td>
+<td>P1</td>
+<td>已复现实现缺陷</td>
+<td>并行补丁导出可覆盖已有源码文件</td>
+</tr>
+<tr>
+<td>F02</td>
+<td>P1</td>
+<td>已复现恢复缺陷</td>
+<td>补丁应用成功、manifest 保存失败后无法正常重试或清理</td>
+</tr>
+<tr>
+<td>F03</td>
+<td>P1</td>
+<td>长任务协议缺口</td>
+<td>任务、执行尝试、等待原因与恢复条件没有统一记录</td>
+</tr>
+<tr>
+<td>F04</td>
+<td>P1</td>
+<td>授权续接协议缺口</td>
+<td>授权来源、范围变化和停止后的恢复条件未形成持久契约</td>
+</tr>
+<tr>
+<td>F05</td>
+<td>P2</td>
+<td>激活边界风险</td>
+<td>可选重流程可被宿主直接选中，绕过核心流程的适用限制</td>
+</tr>
+<tr>
+<td>F06</td>
+<td>P2</td>
+<td>状态与证据关联缺口</td>
+<td>补丁已应用、集成验证完成和最终交付缺少统一关联</td>
+</tr>
+<tr>
+<td>F07</td>
+<td>P2</td>
+<td>验证覆盖缺口</td>
+<td>静态结构测试与辅助脚本测试不能验证真实代理执行行为</td>
+</tr>
+</tbody></table>
+<h3 id="section-25">F01 并行补丁导出可覆盖已有源码</h3>
+<p><strong>位置：</strong><a href="E:/my-project/relayforge-development/skills/development-workflow/scripts/parallel_worktree.py:298">parallel_worktree.py 的 command_export</a>，重点为第 310 至 312 行。</p>
+<p><code>--output</code> 解析为绝对路径后直接创建父目录并 <code>write_bytes</code>。没有检查目标是否已存在、是否属于源码树、是否是工作流状态或是否与其他重要文件冲突。作为对照，<a href="E:/my-project/relayforge-development/skills/finishing-development/scripts/review_package.py:93">review_package.py</a> 已拒绝覆盖已有证据，并限制 checkout 内输出位置。</p>
+<p>**复现：**在临时仓库导出一个合法 Worker 补丁，将 <code>--output</code> 指向主 checkout 中已有且被 Git 跟踪的 <code>sentinel.txt</code>。命令成功，原内容被替换为以 <code>diff --git</code> 开头的补丁。没有修改真实仓库文件。</p>
+<p>**影响：**参数选择失误即可覆盖源码或证据；同一路径反复导出也会替换先前的审阅对象。该选项是可选路径，正常默认导出路径并不意味着这项风险已经被约束。</p>
+<p>**建议验收条件：**默认拒绝覆盖；限制安全输出位置；禁止输出到源码、manifest 和输入文件；同一补丁审查期间保持身份不变。负例必须验证原文件字节不变。</p>
+<h3 id="section-26">F02 应用补丁与记录结果之间存在恢复空档</h3>
+<p><strong>位置：</strong><a href="E:/my-project/relayforge-development/skills/development-workflow/scripts/parallel_worktree.py:336">command_integrate</a> 先于第 355 行执行 <code>git apply</code>，随后才在第 363 行保存 <code>integrated</code>；<a href="E:/my-project/relayforge-development/skills/development-workflow/scripts/parallel_worktree.py:367">command_cleanup</a> 依赖该状态。</p>
+<p>**复现：**在临时仓库让补丁正常应用，随后在保存 integrated manifest 时注入 <code>OSError</code>。主文件已更新，磁盘状态仍为 <code>exported</code>。再次 integrate 报“主 checkout 已修改 Worker 所属路径”，cleanup 报“成功集成前拒绝清理”。</p>
+<p>**影响：**这是一种安全拒绝，未在探针中造成已应用结果丢失；但脚本没有将不确定结果核对成可继续状态的路径。进程中断或磁盘写失败后，需要人工检查并协调状态。<code>save_manifest</code> 直接覆盖写入也存在中断留下不完整 JSON 的静态风险，本次未模拟真实断电。<a href="E:/my-project/relayforge-development/skills/development-workflow/scripts/parallel_worktree.py">L07</a></p>
+<p>**建议验收条件：**记录操作意图，使用原子状态文件替换；恢复时核对冻结补丁身份及主工作区内容。已证明应用的补丁可以恢复为已应用状态，内容不确定时保留证据并停止；不能简单把“有修改”当成可安全重放。文件系统、Git 与状态文件不能靠一次普通 JSON 写入获得跨系统事务。</p>
+<h3 id="section-27">F03 长任务的续接协议不足以区分多种中断</h3>
+<p><strong>位置：</strong><a href="E:/my-project/relayforge-development/skills/development-workflow/SKILL.md:81">development-workflow</a> 维护 <code>pending / active / blocked / integrated</code>；<a href="E:/my-project/relayforge-development/skills/writing-plans/SKILL.md:50">writing-plans 模板</a> 保存任务与执行信息，但没有定义执行尝试、人工暂停、等待外部输入和具体恢复触发。</p>
+<p>已有恢复规则要求保存决策、证据和检查实际 checkout，这是正确基础。缺口是缺少统一字段与状态转换：环境失败、等待用户回答、预算中止和用户明确暂停，可能都被压到 blocked。尝试次数、无进展轮数及审查轮数也没有统一的持久位置。</p>
+<p>**可能触发：**跨会话继续一个失败任务时重复派发；恢复后重新计数；已经被用户暂停的工作被误判为普通阻塞而继续。这里是协议风险，不能据此断言宿主没有自己的暂停保护。</p>
+<p>**建议验收条件：**仅对跨会话、延后和交接任务增加任务级记录与尝试级记录，保存等待对象、恢复条件、当前证据和尝试计数。Quick 继续留在对话，不强制创建任务数据库或文件。</p>
+<h3 id="section-28">F04 授权延续缺少可核对的最小记录</h3>
+<p><strong>位置：</strong><a href="E:/my-project/relayforge-development/skills/task-router/SKILL.md:91">task-router</a>、<a href="E:/my-project/relayforge-development/skills/development-workflow/SKILL.md:8">development-workflow</a> 和 <a href="E:/my-project/relayforge-development/skills/finishing-development/SKILL.md:46">finishing-development</a> 都要求复用授权，计划模板也有 authorization。</p>
+<p>问题不在于没有授权意识，而在于没有共同定义“保存哪些事实才能在恢复后复用”：授权来自哪条请求、涵盖哪些对象与行为、哪些动作单独获准、哪些动作被撤回、引用内容与子代理建议为何不能扩大权限。</p>
+<p>SuperAgent 的 Mandate 提供了可借鉴的来源、范围和版本记录，但其范围语义仍需 Worker 遵守。RelayForge 应记录用户与宿主可核对的事实，而非将自由文本 token 当成新的权限系统。</p>
+<p>**建议验收条件：**已授权的日常工作无需重复确认；未授权 commit、push 等不被恢复流程自行授权；撤回、暂停和范围扩大能被区分；后续评论和日志不能自行授予新权限。</p>
+<h3 id="section-29">F05 可选重流程的描述与激活边界不一致</h3>
+<p><strong>位置：</strong><a href="E:/my-project/relayforge-development/skills/subagent-driven-development/SKILL.md:3">subagent-driven-development 描述</a> 面向当前会话的独立实施计划；<a href="E:/my-project/relayforge-development/skills/task-router/SKILL.md:58">task-router</a> 则要求该重流程只能由用户明确选择。宿主可以直接选技能，README 也已承认 Router 不是硬分发器。</p>
+<p>若直接选中该流程，就会进入每任务独立实现、审查、检查点及提交前确认；第 138 至 144 行要求未批准提交时暂停后续任务。该流程还允许五轮修复，而核心开发流程采用三轮上限。它们是不同执行契约，不能悄悄混用。<a href="E:/my-project/relayforge-development/skills/subagent-driven-development/SKILL.md">L08</a></p>
+<p>相似风险存在于 <a href="E:/my-project/relayforge-development/skills/code-review/SKILL.md:3">code-review</a>：描述包含 work-in-progress，但实际输入是 <code>HEAD</code> 与固定点的 diff，且要求外部 tracker；核心 review-surface 已提供兼容性说明，直接入口仍可能绕过这项检查。<a href="E:/my-project/relayforge-development/skills/finishing-development/references/review-surface.md">L06</a></p>
+<p>**建议验收条件：**普通“按计划继续”不能仅因此启用重流程；可选入口自身应能表达其前置条件和退出路径；不同流程的轮数、Git 检查点和审查输入要显式保留，不通过修改模型记忆来协调。</p>
+<h3 id="section-30">F06 补丁状态与验收状态缺少统一关联</h3>
+<p>**位置：**辅助脚本在 <code>git apply</code> 后记录 <code>integrated</code>；<a href="E:/my-project/relayforge-development/skills/development-workflow/references/parallel-worktrees.md:74">并行协议</a> 则明确要求补丁及必要检查被接受后才能将任务标记 integrated。</p>
+<p>这两个 integrated 分别表示“补丁已应用”和“任务已整合且验证通过”，不能当作同一事实。当前协议文字已经区分了先后关系，但状态文件中没有对应的验证证据和任务状态关联。</p>
+<p><a href="E:/my-project/relayforge-development/skills/finishing-development/SKILL.md:63">finishing-development</a> 的最终状态声明同样属于模型报告；日志解析可以记录它，却不能验证该声明真实成立。审查快照的 hash 是良好基础，目前没有统一关联任务、当前快照、检查证据和结论。<a href="E:/my-project/relayforge-development/scripts/workflow_logger.py">L05</a></p>
+<p>**建议验收条件：**区分已应用、检查通过、待审阅与最终交付；证据记录所对应的源码或快照发生变化后，只使受影响检查失效。保持按需记录，不要求每个机械修改都生成审查包。</p>
+<h3 id="section-31">F07 实际代理行为尚未由现有测试保证</h3>
+<p>本次现有 48 项测试全部通过，覆盖结构与依赖、上游导入内容、worktree 常规流程、审查包、日志和 benchmark 分析器。<code>test_skill_structure</code> 核对 front matter 和资源依赖，不会实际驱动模型执行技能。<a href="E:/my-project/relayforge-development/tests/test_skill_structure.py">L10</a></p>
+<p><a href="E:/my-project/relayforge-development/docs/task-router-test-cases.md:1">task-router-test-cases</a> 是人工场景集；<a href="E:/my-project/relayforge-development/docs/workflow-benchmark.md:1">workflow-benchmark</a> 定义配对运行和质量条件，分析器校验提交的记录，并不负责运行代理或独立证明布尔字段。这些限制已在文档中诚实说明。</p>
+<p>**缺口：**缺少将新会话执行、产物验收、完整尝试历史、必要人工介入与分析记录衔接起来的可重复评估。单元测试通过不能证明“不会乱选技能、不会重复确认、不会错误恢复”，本次也未提供真实使用样本证明发生频率。</p>
+<p>**建议验收条件：**先用小型固定任务集验证 Quick、契约依赖、越权、暂停恢复、重复输入和中断恢复；保持模型、宿主与起始快照一致；记录失败与返工。只有质量证据相当时才比较耗时和可靠 token 数据。</p>
+<h2 id="section-32">14 两项隔离探针的复现记录</h2>
+<p>探针直接调用当前未修改的 Python helper，在新建的临时 Git 仓库中运行。初始提交仅用于测试夹具；没有对 RelayForge 提交、切换分支或修改技能。</p>
+<h3 id="section-33">14.1 导出覆盖探针</h3>
+<ol>
+<li>初始化临时仓库，忽略 <code>.relayforge/</code>，创建并跟踪 <code>a.txt</code> 和 <code>sentinel.txt</code>。</li>
+<li>创建只拥有 <code>a.txt</code> 的 Worker worktree，修改该文件。</li>
+<li>导出时将 output 指向主 checkout 中的 <code>sentinel.txt</code>。</li>
+<li>比较原文件与结果。</li>
+</ol>
+<p>观测：<code>export_overwrote_tracked_file=true</code>，<code>overwritten_file_starts_with_diff=true</code>。</p>
+<h3 id="section-34">14.2 应用后中断探针</h3>
+<ol>
+<li>正常创建 Worker 并导出补丁。</li>
+<li>仅在探针进程中替换 <code>save_manifest</code>：当准备保存 <code>status=integrated</code> 时抛出 <code>OSError</code>。</li>
+<li>调用 integrate，随后恢复原函数，再调用 integrate 与 cleanup。</li>
+</ol>
+<p>观测结果：</p>
+<pre><code class="language-text">主文件内容：after
+磁盘 manifest 状态：exported
+再次 integrate：primary checkout already changed worker-owned paths: a.txt
+调用 cleanup：refusing cleanup before successful integration
+</code></pre>
+<p>该探针模拟的是补丁已生效、状态落盘未成功的边界，不证明发生过真实断电，也不测量发生概率。结果体现需要“核对并恢复”的路径，不能通过自动 reset 或删除 worktree 规避。</p>
+<h2 id="section-35">15 建议借鉴的最小工作流</h2>
+<p>以下是后续改造的设计目标，不是本轮已经实现的能力。</p>
+<p>**入口：**读取用户意图、现有任务与真实仓库状态；识别新任务、原任务续接、状态查询和明确停止。保留当前 Quick、Standard、Large 与独立风险分级。</p>
+<p>**执行：**小任务使用当前上下文；跨会话任务保存一份简短任务记录。每次重试追加执行尝试，不重复创建目标、计划和分支。仅在已有授权与前置契约成立时继续。</p>
+<p>**恢复：**先检查暂停或停止要求，再核对当前分支、修改、已有提交或 PR、运行中的相关工作及有效检查。根据现实结果决定继续、复用、重新验证或询问；外部操作结果不确定时先查证，不盲目重放。</p>
+<p>**交付：**明确区分实施完成、验证范围、审阅情况和已授权发布结果；把关键结论关联到当前证据。向用户提供可行动结果，保留宿主要求的进度更新，减少重复确认和内部阶段说明。</p>
+<p>**评估：**复用已有 benchmark，把必要产品决策与可避免确认区分开；比较正确性、返工、恢复成功和成本。Hook 日志继续保持元数据范围，不能为了评估而自动收集正文或敏感信息。</p>
+<p>建议任务记录只保留以下事实，不复制整个对话：</p>
+<table>
+<thead>
+<tr>
+<th>层次</th>
+<th>最小信息</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>任务</td>
+<td>ID、目标、范围、排除项、验收条件</td>
+<td>稳定表达整件工作</td>
+</tr>
+<tr>
+<td>授权</td>
+<td>来源引用、允许动作、明确限制、暂停或撤回事实</td>
+<td>恢复时复用正确边界</td>
+</tr>
+<tr>
+<td>尝试</td>
+<td>尝试 ID、所属任务、状态、失败原因、累计轮数</td>
+<td>不重复立项，不重置限制</td>
+</tr>
+<tr>
+<td>工作区</td>
+<td>主分支、基线、所属路径、快照或补丁身份</td>
+<td>核对真实改动</td>
+</tr>
+<tr>
+<td>等待</td>
+<td>等待对象、具体问题、恢复条件、下一步</td>
+<td>区分自动可继续与必须等人</td>
+</tr>
+<tr>
+<td>证据与副作用</td>
+<td>检查对应输入、结果引用；已发生外部行为的对象引用</td>
+<td>避免重复验证与重复发布</td>
+</tr>
+</tbody></table>
+<p>无需照搬 SuperAgent 的全部实体。对当前定位而言，一份按需更新的任务记录与少量确定性辅助能力，比默认启动多个持久 Agent 更适合先验证收益。</p>
+<h2 id="section-36">16 改进顺序与验收场景</h2>
+<table>
+<thead>
+<tr>
+<th>顺序</th>
+<th>范围</th>
+<th>完成后应可验证的行为</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>第一轮</td>
+<td>F01、F02 的辅助脚本可靠性</td>
+<td>非法输出不改原文件；操作中断后可核对恢复；重放不重复应用也不丢工作</td>
+</tr>
+<tr>
+<td>第二轮</td>
+<td>F03、F04、F06 的跨会话契约</td>
+<td>人工停止不被自动恢复；继续同任务保留授权、证据与尝试计数；实际状态与记录一致</td>
+</tr>
+<tr>
+<td>第三轮</td>
+<td>F05 的激活边界</td>
+<td>普通计划执行不误入重流程；未提交审查不会冒称 HEAD-only 审查已覆盖全部改动</td>
+</tr>
+<tr>
+<td>第四轮</td>
+<td>F07 的真实执行评估</td>
+<td>使用固定场景与独立验收，证明质量稳定后再比较成本</td>
+</tr>
+</tbody></table>
+<p>建议增加的验收场景：</p>
+<ol>
+<li>用户只问当前进展，代理不重新开始实现或发布。</li>
+<li>用户明确暂停，自动检查结果和旧子任务完成都不能恢复工作。</li>
+<li>已获实施授权但没有 commit、push 授权，恢复后继续完成可审阅修改，不自行发布。</li>
+<li>补丁应用后进程中断，再运行时能识别已应用结果，不重复打补丁。</li>
+<li>检查通过后相关文件变化，只重跑失效证据，不能复用旧的通过结论。</li>
+<li>一条后续请求仍属于原任务时，不另开分支或重新生成整份计划；超范围部分单独处理。</li>
+<li>并行任务的前置契约只有未提交修改时，继续顺序执行，不为并行制造提交。</li>
+<li>可选审查能力不可用时如实报告缺口，不以自审替代独立审查声明。</li>
+</ol>
+<h2 id="section-37">17 当前不应引入的复杂度</h2>
+<p>当前插件不必增加飞书监听、GitHub 事件服务、SQLite 任务平台或通用副作用队列。只有目标明确扩展为持续接单的团队 Agent，这些才成为需要评估的运行时能力。</p>
+<p>也不应默认给每个任务创建 worktree、给每个步骤派发新代理、将每次检查点变成提交，或复制 <code>danger-full-access</code>。它们会改变插件的权限、成本、安装与跨宿主边界。</p>
+<p>“减少人的注意力”需要通过正确结果和更少无效干预体现，不能解释成不澄清关键产品决策、不报告失败、跳过必要检查，或在没有宿主唤醒能力时提前停止跟进。</p>
+<h2 id="section-38">18 验证结果与交付范围</h2>
+<table>
+<thead>
+<tr>
+<th>检查</th>
+<th>结果</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>当前仓库初始工作区</td>
+<td>干净</td>
+<td>本次基线读取时无既有未提交变更</td>
+</tr>
+<tr>
+<td>三个插件 manifest 版本</td>
+<td>均为 <code>0.1.9</code></td>
+<td>本轮不提交，不改版本</td>
+</tr>
+<tr>
+<td>现有测试</td>
+<td>48 项通过，约 15.3 秒</td>
+<td><code>python -m unittest discover -s tests -v</code></td>
+</tr>
+<tr>
+<td>导出覆盖探针</td>
+<td>复现 F01</td>
+<td>临时仓库原文件被补丁覆盖</td>
+</tr>
+<tr>
+<td>应用后中断探针</td>
+<td>复现 F02</td>
+<td>修改已应用，状态仍 exported，重试与清理均拒绝</td>
+</tr>
+<tr>
+<td>SuperAgent 上游测试</td>
+<td>静态核对</td>
+<td>不是已经运行通过的声明</td>
+</tr>
+<tr>
+<td>本轮业务与工作流改动</td>
+<td>无</td>
+<td>仅新增本分析及其阅读版文档</td>
+</tr>
+</tbody></table>
+<p>本轮结论支持先加强局部脚本与跨会话协议；不支持未经实测地承诺成功率、速度或 token 降幅。</p>
+<h2 id="section-39">附录 A 上游测试怎样保护核心机制</h2>
+<table>
+<thead>
+<tr>
+<th>测试文件</th>
+<th>已阅读的覆盖主题</th>
+<th>对 RelayForge 的启发</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>core-engine.spec.ts</code></td>
+<td>Trigger 去重、线程串行评估、接受事务回滚、过期、恢复与人工后续</td>
+<td>测状态变化和异常顺序，不只测输出文本</td>
+</tr>
+<tr>
+<td><code>effects.spec.ts</code></td>
+<td>事务回滚不派发、执行中更新 generation、退避、重启与顺序</td>
+<td>验证操作与记录之间的空档</td>
+</tr>
+<tr>
+<td><code>delivery.spec.ts</code></td>
+<td>持久化屏障失败后重试、历史分页、取消与消息去重</td>
+<td>区分投递、读取和确认</td>
+</tr>
+<tr>
+<td><code>followups.spec.ts</code></td>
+<td>已有 Worker 负责后续、handback、上下文订阅</td>
+<td>避免同一需求由多个入口重复执行</td>
+</tr>
+<tr>
+<td><code>runtime-concurrency.spec.ts</code></td>
+<td>启动时暂停、人工额外槽位、暂时失败、后台工作与停止</td>
+<td>控制事件交错，而非依靠睡眠猜测竞态</td>
+</tr>
+<tr>
+<td><code>policy.spec.ts</code></td>
+<td>Source 独立身份、准入表、模式变化与授权复核</td>
+<td>验证权限来源与变化，不只测允许路径</td>
+</tr>
+</tbody></table>
+<p>这些测试反映的是上游对运行时不变量的设计投入；不能把源码中的测试存在直接当成生产可用性证明。<a href="https://github.com/deepseek-ai/dsh-superagent-prototype/tree/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/tests">S20</a></p>
+<h2 id="section-40">附录 B 核心实现参考</h2>
+<p>所有上游链接固定到本次源码提交，便于核对行号和后续版本差异。</p>
+<ul>
+<li><a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/README.md">S01 项目定位和公开原型范围</a></li>
+<li><a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/core/model.ts#L22">S02 领域模型与 followupOwners</a></li>
+<li><a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/core/engine.ts#L19">S03 Engine 事务入口</a></li>
+<li><a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/app/runtime.ts#L87">S04 Runtime 装配与启动</a></li>
+<li><a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/core/intake.ts#L19">S05 Intake 接入与扇出</a></li>
+<li><a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/policy.ts#L40">S06 Policy 准入和评估结果校验</a></li>
+<li><a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/core/tickets.ts#L37">S07 Evals 接受与 Tickets 生命周期</a></li>
+<li><a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/executor/dsh.ts#L171">S08 DshExecutor 的槽位与执行恢复</a></li>
+<li><a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/app/delivery.ts#L26">S09 AgentDelivery 的投递去重</a></li>
+<li><a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/core/assignments.ts#L78">S10 Assignment 报告和中断恢复</a></li>
+<li><a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/app/notices.ts#L115">S11 reportRelay 的内部进度与通知区分</a></li>
+<li><a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/app/effects.ts#L42">S12 Effects 持久队列与 generation</a></li>
+<li><a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/app/store.ts#L133">S13 Store 事务与 afterCommit</a></li>
+<li><a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/docs/006-deployment.md#L13">S14 会话权限与部署隔离边界</a></li>
+<li><a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/docs/004-prompts.md">S15 角色与沟通提示词设计</a></li>
+<li><a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/sources/github-trigger.ts#L65">S16 GitHub Trigger 规范化</a></li>
+<li><a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/app/tools/main.ts#L88">S17 主会话显式路由工具</a></li>
+<li><a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/app/outbox.ts#L22">S18 Outbox 与发送回执</a></li>
+<li><a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/sources/github-channel.ts#L17">S19 GitHub 评论发送标记</a></li>
+<li><a href="https://github.com/deepseek-ai/dsh-superagent-prototype/tree/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/tests">S20 上游测试目录</a></li>
+<li><a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/core/evals.ts#L131">S21 Evals 批次与接受</a></li>
+<li><a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/core/stage.ts#L9">S22 阶段派生规则</a></li>
+<li><a href="https://github.com/deepseek-ai/dsh-superagent-prototype/blob/8c32a9dc5d72c033816c6a8110b37f40cf94fba4/src/core/ports.ts">S23 核心外部依赖接口</a></li>
+</ul>
+<h2 id="section-41">附录 C 当前仓库参考</h2>
+<ul>
+<li><a href="E:/my-project/relayforge-development/README.md:1">L01 README 与插件定位</a></li>
+<li><a href="E:/my-project/relayforge-development/skills/task-router/SKILL.md:1">L02 task-router</a></li>
+<li><a href="E:/my-project/relayforge-development/skills/development-workflow/SKILL.md:1">L03 development-workflow</a></li>
+<li><a href="E:/my-project/relayforge-development/skills/writing-plans/SKILL.md:1">L04 writing-plans</a></li>
+<li><a href="E:/my-project/relayforge-development/skills/finishing-development/SKILL.md:1">L05 finishing-development</a></li>
+<li><a href="E:/my-project/relayforge-development/skills/finishing-development/references/review-surface.md:1">L06 review-surface</a></li>
+<li><a href="E:/my-project/relayforge-development/skills/development-workflow/scripts/parallel_worktree.py:178">L07 parallel_worktree.py</a></li>
+<li><a href="E:/my-project/relayforge-development/skills/subagent-driven-development/SKILL.md:117">L08 可选 SDD 流程的提交检查点</a></li>
+<li><a href="E:/my-project/relayforge-development/scripts/workflow_logger.py:25">L09 workflow_logger.py 的状态声明解析</a></li>
+<li><a href="E:/my-project/relayforge-development/tests/test_skill_structure.py:74">L10 技能结构测试</a></li>
+<li><a href="E:/my-project/relayforge-development/docs/workflow-benchmark.md:1">L11 评估协议与证据要求</a></li>
+<li><a href="E:/my-project/relayforge-development/scripts/analyze_workflow_benchmark.py:75">L12 benchmark 分析器的质量判定</a></li>
+</ul>
+</main></body></html>

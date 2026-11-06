@@ -60,13 +60,13 @@ follow that executor's parser; ordinary execution needs no rigid document schema
 **Spec:** [existing source or agreed requirements here; distinguish assumptions]
 **Approach:** [module ownership, contracts, relevant decisions and source pointers]
 **Execution:** [base/working snapshot, task branch, method and reason, authorization,
-stated budget if any, selected risks and verification]
+stated budget if any, execution_mode, route history, selected risks and verification]
 
 ### Task 1: [Observable outcome]
 **Depends on:** [IDs or none]
 **Files / interfaces:** [owned paths, consumed and produced contracts]
 **Checks:** [criterion, public boundary, command and expected result]
-**State:** [pending / active / blocked / integrated; evidence pointer when done]
+**State:** [pending / active / blocked / integrated; contract revision, evidence and fix count]
 - [ ] [Failing behavior test when appropriate, then minimal implementation]
 - [ ] [Run affected checks, integrate and record evidence]
 
@@ -79,6 +79,11 @@ time. Expectations come from requirements/worked examples, not the implementatio
 For mechanical changes plan the edit and focused check. An unrelated environment
 failure is not an expected red test. No separate agent, review or commit packet is
 required per task; finishing owns the integrated review at the chosen risk level.
+
+Keep mode separate from task status. When logging is enabled retain task_run_id,
+event IDs and sequence in this same plan, not a separate state engine. Before
+context handoff name the next ready task, unresolved decisions and source/snapshot
+pointers. On resume compare actual files and contracts before trusting old evidence.
 
 ## Check once and hand off
 

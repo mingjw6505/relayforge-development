@@ -79,6 +79,77 @@ on held-out real tasks before adopting a new default. Schema v2 replaces v1's fi
 30%/25%/80% target keys; consumers must use `comparison.cost_comparison_eligible`
 and the optional `targets` fields.
 
+## Workflow metrics extension
+
+Schema v2 retains its existing keys, pairing and quality gates. Optional
+plugin_version and route_policy_version are variant attributes and may differ
+between baseline and candidate. Missing versions remain unknown. Optional top-level
+rubric_id must match within a pair if either record supplies it; task_id continues
+to identify a fixed task and rubric for legacy records.
+
+| Optional field | Structure and interpretation |
+| --- | --- |
+| route_decisions | List of rubric_id, allowed_routes (non-empty L1/L2/L3 list), actual_route (L1/L2/L3 or null) |
+| route_changes | upgrades, downgrades (non-negative integers), complete (boolean), source (host_observed or agent_declared) |
+| coordination | List of phase (dispatch/context/wait/integration/rework), unit (ms/tokens), value (finite non-negative number), source |
+| overrouting_cost / underrouting_cost | unit, value, source and non-empty evidence_ref for attributed extra cost; omit when unknown |
+| handoff | applicable, verified, disclosed counts with verified ≤ disclosed ≤ applicable; critical_fields_passed and readiness_passed (boolean or null) |
+
+Example candidate fields, illustrative rather than measured:
+
+~~~json
+{
+  "plugin_version": "0.1.9",
+  "route_policy_version": "v2.1",
+  "rubric_id": "fixed-task-v1",
+  "route_decisions": [
+    {"rubric_id": "initial-local", "allowed_routes": ["L1"], "actual_route": "L1"},
+    {"rubric_id": "revealed-design", "allowed_routes": ["L2"], "actual_route": null}
+  ],
+  "route_changes": {"upgrades": 1, "downgrades": 0, "complete": false, "source": "agent_declared"},
+  "handoff": {"applicable": 5, "verified": 4, "disclosed": 5, "critical_fields_passed": true, "readiness_passed": null}
+}
+~~~
+
+Freeze allowed routes, risks, critical handoff fields and required behavior before
+execution. Multiple reasonable routes may be allowed. Reveal dynamic facts in
+stages and grade using only information available at each decision. Do not change
+the rubric after seeing a solution. A requirement change creates a new task/rubric
+version, not a corrected answer for a completed trial.
+
+workflow_metrics groups routing by variant and policy. Accuracy, over- and
+under-routing rates use scored decisions; missing actual routes reduce coverage.
+Routes above the highest allowed level are over-routing; below the lowest are
+under-routing; other disallowed routes are separate mismatches. No policy version
+means decisions are not scored. Report both decision coverage and run coverage;
+an omitted list is not a run with perfect routing.
+
+Keep coordination samples separated by phase, unit and source. Do not add
+overlapping worker time to controller waiting as task elapsed time. Route-choice
+counts do not establish extra cost: attributed route costs require evidence;
+missing costs are null. Incomplete route-change histories report observed counts,
+not proven full-task totals. human_rework remains corrective intervention count;
+the report additionally shows runs-with-rework over measured runs.
+
+Handoff verified means facts checked, not merely headings or filled placeholders.
+Unknown can be disclosed but is not verified. Use applicable fields for the
+required form: ordinary L1 inline handoffs do not need nine full sections.
+critical_fields_passed verifies identity, attribution, evidence, code reference,
+availability and blocking disclosures. readiness_passed separately checks that
+the required testing transfer is usable; a complete blocked report may pass
+disclosure while failing readiness. False fails quality, null leaves it unknown,
+even if acceptance booleans elsewhere are true. Field counts alone cannot prove
+truth; retain supporting assessment.
+
+## Functional and effectiveness acceptance
+
+F covers implementation, input validation, compatibility, missing data, deduplication,
+statistics and actual workflow behavior. Q requires real paired agent runs with
+the fixed acceptance/risk rubric and reliable cost measurement. F passing does not
+establish Q. Without such runs, report Q not evaluated; if trials failed, preserve
+that failure. Unknown or failed quality never qualifies an overall cost claim.
+One smoke probe or shorter entrypoint text is not a token/performance benchmark.
+
 ## Small executable probes
 
 Begin with three isolated working repositories: a mechanical UI label change,

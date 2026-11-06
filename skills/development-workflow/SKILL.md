@@ -10,6 +10,26 @@ Reuse the router's acceptance, dependencies, risk, selected skills, budget and
 authorization. If invoked directly, infer these from the request and affected
 code instead of starting another routing conversation.
 
+Standard=L2 uses minimal specification-driven development (SDD); Large=L3
+adds durable dependency coordination. A primary agent can coordinate sequentially.
+Multiple sessions alone do not select L3. Quick/L1 stays inline with the same
+evidence principles and finishing, without loading this whole workflow.
+
+## Minimal SDD and adjustments
+
+Maintain three logical areas: Spec (outcome, scope, behavior, boundaries and
+acceptance); Plan (approach, affected contracts/data, risks and checks); Tasks
+(work, dependencies, ownership and completion). Reuse upstream requirements and
+existing plans. One combined file or the current context is enough; persist for
+multi-session, deferred work or handoff through writing-plans.
+
+Do not conduct product discovery or invent unresolved behavior. Return consequential
+product decisions to the user/upstream, continuing independent authorized work.
+Keep execution_mode separate from pending/active/blocked/integrated task states.
+Read [task contracts and recovery](references/task-contracts.md) for coordinated
+tasks, contract changes or context recovery. Route changes preserve valid results,
+authorization and fix counts; update the existing plan rather than restart it.
+
 ## Establish only missing context
 
 Inspect the affected path, direct callers and adjacent tests. Record the observable
@@ -92,7 +112,9 @@ Controller coordinates without editing. The protocol owns isolation, frozen
 patches, integration and cleanup. Its clean base must contain verified prerequisites.
 If a prerequisite is only uncommitted, continue sequentially in that checkout;
 do not manufacture a commit/stash to enable parallelism. Stop affected consumers
-when shared contracts change, refresh inputs, then reschedule.
+when shared contracts change, refresh inputs, then reschedule. Reassess their
+transitive consumers and affected checks; keep old code/evidence for diagnosis
+instead of automatically deleting or reverting it.
 
 For dependent frontend/backend work, implement vertical slices and follow
 [backend-to-frontend handoff](references/backend-frontend-handoff.md): verify the

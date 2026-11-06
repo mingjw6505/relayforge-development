@@ -11,6 +11,11 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
+try:
+    from workflow_logger import WORKFLOW_FIELDS, validate_workflow_event
+except ModuleNotFoundError:
+    from scripts.workflow_logger import WORKFLOW_FIELDS, validate_workflow_event
+
 
 def parse_timestamp(value: Any) -> Optional[datetime]:
     if not isinstance(value, str):
@@ -72,6 +77,103 @@ def turn_key(record: Dict[str, Any]) -> Optional[Tuple[str, str]]:
     return None
 
 
+def workflow_decisions(records: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Analyze declarations separately from legacy final lines and host events."""
+    groups = {}
+    seen = {}
+    partial = set()
+    issues = []
+    duplicates = 0
+    invalid = 0
+    conflicted_ids = set()
+    for record in records:
+        kind = record.get("event")
+        if (not isinstance(kind, str) or kind not in WORKFLOW_FIELDS) and "workflow_event_schema_version" not in record:
+            continue
+        payload = {k: v for k, v in record.items()
+                   if k not in {"timestamp", "source", "schema_version"}}
+        # Old normal is a read-time alias, never an accepted new declaration.
+        if payload.get("risk") == "normal":
+            payload["risk"] = "medium"
+        try:
+            if record.get("source") != "agent_declared":
+                raise ValueError("not a declaration")
+            payload = validate_workflow_event(payload)
+        except (ValueError, TypeError):
+            invalid += 1
+            issues.append({"reason": "invalid declaration", "record": len(issues)})
+            run = record.get("task_run_id")
+            if isinstance(run, str):
+                partial.add(run)
+            continue
+        identity, run = payload["event_id"], payload["task_run_id"]
+        groups.setdefault(run, [])
+        if identity in seen:
+            if payload == seen[identity]:
+                duplicates += 1
+            else:
+                conflicted_ids.add(identity)
+                partial.update((run, seen[identity]["task_run_id"]))
+                issues.append({"task_run_id": run, "reason": "event_id conflict"})
+            continue
+        seen[identity] = payload
+        groups[run].append(payload)
+
+    initial, final, delivery = Counter(), Counter(), Counter()
+    upgrades = downgrades = 0
+    histories = []
+    for run, events in sorted(groups.items()):
+        events.sort(key=lambda e: e["sequence"])
+        sequences = [e["sequence"] for e in events]
+        sequence_counts = Counter(sequences)
+        if sequences != list(range(1, len(events) + 1)):
+            partial.add(run)
+            issues.append({"task_run_id": run, "reason": "missing or conflicting sequence"})
+        current = None
+        selected = 0
+        ended = False
+        for item in events:
+            if item["event_id"] in conflicted_ids or sequence_counts[item["sequence"]] > 1:
+                continue  # Ambiguous records are diagnostics, never measured decisions.
+            kind = item["event"]
+            if ended:
+                partial.add(run)
+                issues.append({"task_run_id": run, "reason": "event after completion"})
+            if kind == "route_selected":
+                selected += 1
+                if selected != 1 or item["sequence"] != 1:
+                    partial.add(run)
+                    issues.append({"task_run_id": run, "reason": "invalid initial selection"})
+                else:
+                    current = item["execution_mode"]
+                    initial[current] += 1
+            elif kind == "route_changed":
+                if current != item["from"]:
+                    partial.add(run)
+                    issues.append({"task_run_id": run, "reason": "route discontinuity"})
+                else:
+                    upgrades += item["to"] > current
+                    downgrades += item["to"] < current
+                current = item["to"]
+            elif kind == "handoff_generated":
+                delivery[item["development_status"]] += 1
+            elif kind == "workflow_completed":
+                ended = True
+        if selected != 1:
+            partial.add(run)
+            issues.append({"task_run_id": run, "reason": "missing initial selection"})
+        if run not in partial and current:
+            final[current] += 1
+        histories.append({"task_run_id": run, "partial": run in partial,
+                          "final_route": current if run not in partial else None,
+                          "ended": ended, "events": events})
+    return {"tasks": len(groups), "duplicates": duplicates, "invalid_events": invalid,
+            "partial_tasks": sum(run in partial for run in groups), "initial_routes": dict(initial), "final_routes": dict(final),
+            "upgrades": upgrades, "downgrades": downgrades,
+            "declared_delivery_status": dict(delivery), "issues": issues, "histories": histories,
+            "source": "agent_declared"}
+
+
 def analyze(records: List[Dict[str, Any]], malformed: int) -> Dict[str, Any]:
     durations: Dict[str, List[int]] = defaultdict(list)
     outcomes: Counter[str] = Counter()
@@ -87,6 +189,8 @@ def analyze(records: List[Dict[str, Any]], malformed: int) -> Dict[str, Any]:
 
     for record in records:
         event = record.get("event")
+        if not isinstance(event, str):
+            continue
         key = turn_key(record)
         timestamp = parse_timestamp(record.get("timestamp"))
 
@@ -158,6 +262,7 @@ def analyze(records: List[Dict[str, Any]], malformed: int) -> Dict[str, Any]:
             field: dict(sorted(counts.items()))
             for field, counts in sorted(workflow_status.items())
         },
+        "workflow_decisions": workflow_decisions(records),
         "tool_outcomes": dict(sorted(outcomes.items())),
         "interrupted_turns": interrupted,
         "unmatched_tool_starts": len(started_tools - completed_tools),

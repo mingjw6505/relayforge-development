@@ -9,7 +9,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 SKILLS = ROOT / "skills"
 OPTIONAL = SKILLS / "task-router/references/optional-workflows.json"
-CORE = {"task-router", "development-workflow", "finishing-development", "writing-plans"}
+CORE = {"task-router", "development-workflow", "finishing-development", "writing-plans",
+        "delivery-handoff"}
 
 
 def prose(text):
