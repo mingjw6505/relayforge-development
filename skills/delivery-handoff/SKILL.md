@@ -1,6 +1,6 @@
 ---
 name: delivery-handoff
-description: Generate or update a testing handoff after implementation or on an explicit handoff request, using actual changes and development evidence. Skip product requirements writing, ordinary explanations and final independent test conclusions.
+description: Generate or update a testing handoff when selected during finishing, explicitly requested or required by repository rules, using actual changes and development evidence. Skip ordinary completion summaries, product requirements writing and final independent test conclusions.
 ---
 
 # Delivery Handoff
@@ -9,13 +9,19 @@ Reuse finishing's integrated changes, acceptance, evidence and gaps. When invoke
 directly, inspect those facts without restarting implementation, tests or review.
 The testing agent independently chooses tests and reaches its own conclusions.
 
+Read and apply [progress in the conversation](../task-router/references/progress-display.md),
+including for direct handoff requests. Reuse any existing progress view; show
+evidence reconciliation, handoff preparation and its actual readiness or blocker.
+
 ## Select the form
 
-L2/Standard and L3/Large need a full Markdown file, including a blocked handoff.
-L1/Quick needs one only when the user requests a file or explicit transfer to a
-testing agent. Other L1 tasks report inline: outcome, actual changes, possible
-impact, executed checks, gaps and code availability. High risk adds checks, not
-automatically a file. Keep an existing file after a route downgrade.
+A selected/requested full handoff, explicit transfer to a testing agent or
+repository requirement needs a full Markdown file, including a blocked handoff.
+Honor the finishing selection regardless of L1/L2/L3; route size and high risk
+alone do not require a file. Other completions report inline without loading the
+full template: outcome, actual changes, possible impact, executed checks, gaps
+and code availability. Preserve any existing handoff; update it when the current
+scope includes maintaining that handoff, not merely because a route changed.
 
 For a full file read [the template](references/test-handoff-template.md). Use the
 project's delivery convention, otherwise docs/test-handoffs/Test-Handoff-<task-id>.md.

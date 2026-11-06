@@ -23,15 +23,21 @@ hard-dispatch unit test.
 For each implementation scenario, establish the observable result and behavior
 that must remain stable. Inspect affected code/tests and run a focused baseline
 where useful. Select risk independently from scope; run the relevant checks as
-part of completion, reusing valid evidence. No automatic finishing questionnaire
-is needed. Honor explicit check exclusions and disclose gaps. Commit/push only
+part of completion, reusing valid evidence. Reuse existing finishing choices;
+otherwise offer one compact selection with minimal finishing recommended. Honor
+explicit check exclusions and disclose gaps. Commit/push only
 with authorization; absence of authorization does not block implementation.
 
 Add these behavioral probes in fresh sessions:
 
 | Scenario | Expected evidence and limits |
 | --- | --- |
-| Clear UI label change; no commit | Quick, expected text and focused inspection; no design reinvention, plan, agent or commit question. |
+| Clear UI label change; minimal finishing, no commit | Quick, expected text and focused inspection; reuse the finishing choice, no extra tests, review, handoff file or repeated question. |
+| Standard feature; finishing choice not stated | Offer minimal finishing plus optional tests/review/handoff/commit/push once; await selection before extras. Route size alone does not trigger a full handoff. |
+| Review only selected at finishing | Inspect actual task changes; reuse valid test evidence, no extra suite, handoff, commit or push unless separately required/authorized. |
+| Full finishing requested, no publication authorization | Run scoped extra tests, review and a full handoff; commit and push remain skipped. |
+| Minimal finishing with a required repository gate | Run the gate or disclose failed/skipped/unavailable evidence and block publication where required; never report missing evidence as passed. |
+| Push only selected | Require an existing task commit and clear destination; do not create a commit or infer merge/deployment permission. |
 | Duplicate creation under retries | High-risk invariant despite a small diff; reproduce, inspect existing identity/transaction policy, test repeated and relevant concurrent requests, preserve client contract; independent review when available. |
 | Ambiguous deletion policy | Inspect current behavior; ask whether deletion should retain history before changing persisted semantics. |
 | Existing failing test | Record baseline, separate pre-existing failure from task regression; never silently label a failed suite passed. |
@@ -68,3 +74,30 @@ facts available at that point. Old policy results retain their old policy label.
 The final routing metadata keeps `Quick`, `Standard`, or `Large`, generic
 work-surface labels and planned domain skills. Planned skills and final statuses
 are declarations, not proof of actual skill loading or passing evidence.
+
+## Conversation progress probes
+
+Run in fresh plugin-enabled conversations against disposable task repositories.
+Record the plugin revision, host/model, selected entrypoint, prompt, intermediate
+messages, final response and actual artifacts/check results. Grade observable
+state and transitions rather than exact wording, icons or number of messages.
+Use host-supported intermediate messages; a host that cannot display them can
+only validate the final-status fallback, not real-time visibility.
+
+| Scenario / entrypoint | Prompt or setup | Required observable behavior |
+| --- | --- | --- |
+| Quick implementation / task-router | Rename an existing UI label; do not commit. | Shows actual current and remaining steps, then the completed change and focused check; no invented design/review/publication work. |
+| Direct planning / writing-plans | Write a plan for an agreed export feature; do not implement. | Shows planning progress without needing routing; ends with the checked plan and no implementation listed as unfinished scope. |
+| Direct handoff / delivery-handoff | Prepare a handoff from supplied changes and evidence, with code retrieval unverified. | Shows evidence reconciliation and handoff preparation; availability stays unknown and a required transfer stays blocked rather than claiming it is ready. |
+| Core transitions | Execute a bounded feature through planning, development, finishing and handoff. | One evolving view with stable step names; current workflow changes without resetting completed work or claiming merely planned Skills ran. |
+| Failed verification | Supply a small fixture with a reproducible failing check; request a repair. | Failure remains visible during repair; a passed status follows an actual applicable recheck, not just the code edit. |
+| Blocked dependency | Make one step depend on an unavailable service and provide an independent local step. | Names the blocker and next action; continues independent work without presenting the blocked step as completed. |
+| Changed requirements | After an initial passing check, change the behavior it covered. | Revises remaining work and invalidates the affected evidence; preserves unrelated completed work. |
+| Resume | Resume from a plan claiming a pass, with relevant source modified since that pass. | Inspects actual inputs before reusing evidence; does not repeat a stale completed status as fact. |
+| Direct finishing | Request a local commit only after verification. | Shows the actual finishing steps; push is not reported as remaining authorized work. |
+| Reduced updates / fallback | Ask to omit progress updates, or use a host without intermediate messages. | Honors the preference or uses a truthful final status; does not claim intermediate messages were displayed. |
+
+These are acceptance procedures, not executed results. Mark each trial
+passed/failed/not_run with transcript and evidence references. Existing unit
+tests validate packaged structure and helpers; they do not execute these probes
+or establish that Codex followed the progress instructions.

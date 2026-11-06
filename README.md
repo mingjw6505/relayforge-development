@@ -15,7 +15,7 @@ Claude Code, ChatGPT, and compatible agent hosts.
 - `skills/development-workflow/` — proportional Standard/Large implementation.
 - `skills/development-workflow/scripts/parallel_worktree.py` — guarded task
   branches and exceptional parallel-worker worktrees.
-- `skills/finishing-development/` — risk-proportional checks and authorized commit/push.
+- `skills/finishing-development/` — minimal checks and user-selected finishing actions.
 - `skills/delivery-handoff/` — testing handoff from actual changes and evidence.
 - `hooks/hooks.json` — optional Codex lifecycle telemetry hook.
 - `scripts/workflow_logger.py` — metadata-only Hook event logger.
@@ -53,11 +53,13 @@ callers and tests and captures a focused baseline where useful. Large full-stack
 work proceeds in small vertical slices, with a verified backend contract handed
 to the dependent frontend within each slice.
 
-Verification is part of implementation: reuse passing evidence, run missing
-risk-proportional checks and inspect behavior changes. High-risk work uses one
-independent reviewer when available; missing capabilities or explicitly declined
-checks remain visible. Commit and push run only when authorized. If neither was
-requested, finish without a mandatory approval questionnaire. Core execution can
+Verification is part of implementation: reuse passing evidence and run missing
+required checks. Finishing reuses the user's existing choices; otherwise it offers
+one compact selection, recommending minimal checks and an inline result. Users
+can add extra tests, code review, a handoff document, commit and/or push. Required
+repository/acceptance gates remain in force; skipped checks stay visible. Full
+finishing includes tests, review and handoff, while commit and push each need
+explicit authorization. Core execution can
 continue sequentially from verified uncommitted work. The separate upstream
 per-task workflow has different checkpoint requirements and is not selected just
 because a plan or subagent is used.
@@ -98,8 +100,9 @@ both workflows' file availability, and unresolved or stale dependency declaratio
 ## Effort and scope defaults
 
 Small tasks use the current context. Multi-session work persists only the needed
-agreement, dependency plan and evidence. Ordinary changes use a Controller review;
-high-risk work adds independent review. Directly related, verifiable structural
+agreement, dependency plan and evidence. When review is selected or required,
+ordinary changes use a Controller review and high-risk work adds independent
+review when available and authorized. Directly related, verifiable structural
 improvements are allowed; larger refactors are separate proposals and do not stop
 correct in-scope delivery unless they are prerequisites.
 
@@ -118,10 +121,29 @@ skills infer missing context. Routes adjust when new design or coordination fact
 appear, preserving tasks, valid evidence, authorization and cumulative fix counts.
 Risk is low/medium/high; legacy normal is read as medium.
 
+## Conversation progress
+
+The five core workflows (`task-router`, `writing-plans`, `development-workflow`,
+`finishing-development` and `delivery-handoff`) share a compact progress view in
+the conversation, including direct planning or handoff requests: the current
+workflow, completed work, the current step, remaining steps and any blocker.
+The same view continues across workflow transitions. Failed and skipped steps
+remain distinct from completed work; planning-only requests end at the plan.
+Updates follow meaningful changes rather than every tool call. The
+agent reports its own task state, not a host-verified history of Skill loads;
+planned or skipped work is never presented as completed. When intermediate
+messages are unavailable, the final response carries the status instead.
+This requires no telemetry hook or separate service, but depends on the host
+selecting the relevant workflow and displaying intermediate messages.
+Standalone specialist Skills do not automatically load these core instructions.
+See [conversation progress probes](docs/task-router-test-cases.md#conversation-progress-probes)
+for behavioral acceptance; structural tests alone do not establish host behavior.
+
 ## Testing handoff
 
-After finishing, Standard/L2, Large/L3 and explicitly requested testing transfers
-produce a Test-Handoff-<task-id>.md. Other Quick/L1 work uses an inline handoff.
+All routes use an inline completion summary by default. A selected handoff
+document, explicit testing transfer or repository requirement produces a
+Test-Handoff-<task-id>.md; Standard/L2 and Large/L3 alone do not trigger a file.
 Changed files, direct/indirect impact, upstream acceptance, test suggestions,
 actual development checks, environment, code references and gaps remain separate.
 

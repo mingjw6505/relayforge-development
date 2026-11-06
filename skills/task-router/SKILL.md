@@ -13,6 +13,10 @@ The primary agent is the single coordinator. This is a recommended entrypoint,
 not a hard dispatcher: hosts may select a skill directly. That skill fills missing
 context without restarting routing or creating a second coordinator.
 
+For implementation tasks, read and apply the conversation progress display in
+[progress in the conversation](references/progress-display.md). Show actual
+completed, current, remaining and blocked work as it becomes known.
+
 ## Inspect once, decide
 
 Resolve from the request and affected code:
@@ -137,4 +141,7 @@ current route, not a history of intermediate changes.
 
 Before replying after an implementation route, including Quick, read and apply
 finishing-development using the evidence already collected. This closes the same
-task; it does not start another test/review cycle or approval question.
+task; it does not automatically start another test/review cycle. Finishing reuses
+existing choices, or offers one selection of optional work, distinct from
+approving implementation or internal routing. All routes default to minimal
+finishing; extra tests, review and a handoff file run only when selected or required.

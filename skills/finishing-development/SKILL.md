@@ -1,23 +1,61 @@
 ---
 name: finishing-development
-description: Reconcile acceptance and risk-proportional verification, review the actual changes and perform only authorized commit/push actions. Use after implementation or when these finishing actions are requested.
+description: Finish implementation with minimal checks and user-selected extra tests, review, handoff or authorized commit/push. Use after implementation or when these finishing actions are requested.
 ---
 
 # Finishing Development
 
-Use existing acceptance, risk, baseline and authorization. Finish required checks
-without another questionnaire. Honor exclusions and report resulting gaps.
+Use existing acceptance, risk, baseline, finishing choices and authorization.
+Default to minimal finishing; extra work follows the user's selection.
+
+Read and apply [conversation progress](../task-router/references/progress-display.md)
+when entering finishing, including when this skill is selected directly. Reuse
+the existing view and update it when the outcome or a blocker is known.
+
+## Choose finishing scope once
+
+Reuse choices already stated in the request or conversation, including exclusions
+and time limits. Do not ask again because a phase, route or session changed.
+Otherwise offer one compact choice before starting optional work, in the user's
+language, for example: "收尾默认精简（推荐）；可加选：补充测试 / 代码审查 /
+交接文档 / commit / push。需要哪些？" Use the host's question tool when available;
+if it cannot represent multiple selections, allow a free-text combination.
+Complete the minimal checks while awaiting the answer; wait for the selection
+before optional work. If interactive choice is unavailable, report the minimal
+result and skipped extras. Silence or a preselected option is not authorization.
+
+| Scope | Work |
+| --- | --- |
+| Minimal (recommended) | Check task scope and result, reuse valid evidence, run missing required checks, and give a short inline outcome with gaps |
+| Extra tests | Run selected additional tests within the agreed scope/budget; no automatic full suite |
+| Code review | Review the actual changes using the risk guidance below |
+| Handoff document | Use delivery-handoff to create/update the full testing handoff |
+| Commit / push | Perform only the separately selected or previously authorized action, subject to its gates |
+
+"Full finishing" selects extra tests, review and the handoff document; it does
+not itself authorize commit or push. Route size alone adds no optional step.
+Keep the selection in the current task context; no new configuration file is needed.
+
+Repository-mandated checks and explicit acceptance/review requirements still apply
+in minimal mode. Explain any remaining required cost or gate. If the user declines
+a required check, record skipped/partial and its effect on delivery/publication;
+do not claim it passed or bypass a non-waivable repository rule. Risk-based
+recommendations beyond those requirements are optional, with gaps disclosed.
 
 ## Evidence and review
 
 Map required outcomes to the integrated result, not the sum of child reports.
 Reuse a passed check while its relevant source, dependencies and configuration
-are unchanged. Run missing/invalidated checks; full suites only when repository
-rules or blast radius require them. Preserve unrelated baseline failures separately.
+are unchanged. Run missing/invalidated required checks and selected extras; a
+full suite needs a repository/acceptance requirement or the selected test scope.
+Preserve unrelated baseline failures separately.
 Unavailable credentials, required external mutation or an exceeded budget leaves
 a gap requiring the relevant decision, not a fabricated pass.
 
-| Change | Default review |
+Apply this table when review is selected or required; minimal result inspection
+does not automatically start a separate review phase.
+
+| Change | Review scope |
 | --- | --- |
 | Low-risk mechanical edit | Focused result check; code review may be skipped |
 | Ordinary behavior change | Controller inspects requirements conformance and engineering quality |
@@ -33,8 +71,9 @@ two attempts without progress require reassessment, and user budgets take preced
 Cover the actual task result: committed, staged, unstaged and task-owned untracked
 files, including deletions/renames. Compare with the starting revision and existing
 change baseline, exclude unrelated work and identify mixed ownership before staging.
-Record revision and content/hashes; later relevant changes invalidate the affected
-review. Missing starting evidence limits attribution and must be disclosed.
+For a selected/required review, record revision and scoped content/hashes; later
+relevant changes invalidate it. Missing starting evidence limits attribution and
+must be disclosed.
 
 Bind each check to command/method, result, scope, evidence pointer and the actual
 code inputs: commit for committed results, or base/HEAD plus scoped content hashes
@@ -57,8 +96,9 @@ review fallback when its inputs, prerequisites or delegation policy do not fit.
 
 ## Authorized publication
 
-Reuse existing authorization. If commit/push were not requested, finish with them
-skipped; do not ask a finishing-choice question. For an authorized commit, stage
+Reuse existing authorization, including explicit selections above. If commit/push
+were not selected or requested, mark them skipped; no separate publication prompt.
+For an authorized commit, stage
 only task-owned changes and check them against the reviewed snapshot, following
 repository version/message rules. Required gates must pass or an allowable gap
 must be explicitly accepted. Preserve unrelated changes.
@@ -70,14 +110,18 @@ report the local commit if a push fails.
 
 ## Report proportionally
 
-After reconciling the integrated result, use
+Give a concise inline outcome by default. Only when a full handoff is selected,
+explicitly requested or required by repository rules, use
 [delivery-handoff](../delivery-handoff/SKILL.md). Pass actual changed files,
 direct/indirect impact with evidence or Unknown, upstream acceptance mapping,
 test suggestions, executed verification, environment, Git/snapshot references and
 known gaps. Do not rerun checks merely to fill the handoff.
 
-L2/L3 and an explicitly requested testing handoff need a full file. Other L1 work
-uses inline changes, impact, verification, gaps and code availability. Missing
+L1/L2/L3 all use inline changes, impact, verification, gaps and code availability
+unless a full handoff is selected or required. Do not generate a handoff file,
+portable review package or separate evidence report solely because of route size.
+Use scoped content fingerprints for local evidence; freeze a package only for
+a selected/required review or transfer that needs it. Missing
 required implementation or critical gates cannot be hidden as ready_with_issues.
 Implementation completion and downstream code availability are separate facts.
 

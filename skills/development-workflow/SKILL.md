@@ -10,6 +10,10 @@ Reuse the router's acceptance, dependencies, risk, selected skills, budget and
 authorization. If invoked directly, infer these from the request and affected
 code instead of starting another routing conversation.
 
+Read and apply [progress in the conversation](../task-router/references/progress-display.md),
+including when this workflow is selected directly. Reuse the existing progress
+view across route changes and report only work actually completed.
+
 Standard=L2 uses minimal specification-driven development (SDD); Large=L3
 adds durable dependency coordination. A primary agent can coordinate sequentially.
 Multiple sessions alone do not select L3. Quick/L1 stays inline with the same
@@ -134,4 +138,6 @@ checkout, paths are in scope, acceptance maps to evidence or explicit gaps,
 dependent frontend work consumed the current contract, and worker integration/
 recovery state is known. An unmet implementation requirement remains blocked.
 Pass results and gaps to [finishing-development](../finishing-development/SKILL.md)
-automatically; do not ask which routine finishing steps to perform.
+automatically, carrying any existing finishing choices. That skill offers a
+single choice of optional finishing work when no choice exists; route size alone
+does not require extra tests, review or a handoff file.
