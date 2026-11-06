@@ -1,0 +1,20 @@
+[project]
+name = "relayforge-progress"
+version = "0.1.0"
+description = "Standalone read-only offline observation prototype for RelayForge metadata"
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = []
+
+[project.scripts]
+relayforge-progress = "relayforge_progress.cli:main"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+
+[tool.ruff]
+line-length = 100
+
+# Source-tree prototype. Installable wheel packaging is deliberately deferred
+# until the actual Codex collection gate and platform acceptance have passed.
