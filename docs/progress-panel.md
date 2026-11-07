@@ -1,84 +1,82 @@
-# Codex 开发进度面板
+# Codex 内嵌开发进度卡片
 
-RelayForge Development 0.1.13 在插件中提供本地 MCP 进度面板。核心工作流在
-Codex desktop 开发任务开始时调用 `start_progress`，在真实阶段切换和结束时
-调用 `update_progress`。面板每两秒读取其绑定任务，展示步骤、当前工作、受阻、
-最近更新及最终结果。它不读取 Hook 日志，也不解析提示词、源码或工具输出。
+RelayForge Development 0.1.14 将默认展示改为聊天内嵌紧凑卡片。卡片采用已确认
+的灰阶、系统字体、信息行与分隔线，首屏展示任务、工作流、已加载 Skill、当前
+动作、变更、验证与剩余事项。完整步骤、加载记录与验证依据在卡片内展开。
+不再注册 thread 侧栏入口，不默认打开整个侧边应用。
 
-这是 Agent 主动申报的工作状态；对话仅保留关键沟通和必要文字兜底。步骤数不等于业务完成
-百分比，经过时间不代表工具耗时；面板连接正常也不证明 Agent 正在执行。
-小样本实测支持当前 Codex App 在调用展示工具后自动打开右侧面板，宿主报告
-`fullscreen`。这不保证任意任务都被自动路由，也不是宿主生命周期事件直接打开。
+## 信息来源
 
-## 安装与兼容
+`load_progress_skill` 真实读取本插件 `skills/<slug>/SKILL.md` 并把说明返回给
+Agent，同时保存任务内的名称、读取时间、内容 SHA-256 和来源。核心工作流
+加载也会更新当前工作流。只有成功加载的记录进入首屏；计划使用不算已加载。
+文件读取失败、名称不存在、路径越界或符号链接不会产生记录。
 
-- 运行环境需要 PATH 中的 `python3`，版本 3.11+；Python 服务仅使用标准库。
-- 根 `plugin.json` / `mcp.json` 是 portable 包；`.codex-plugin/plugin.json` /
-  `.mcp.json` 提供 Codex 兼容注册。三份插件清单版本保持一致。
-- MCP 以 `python3 -m progress_panel.server` 启动，工作目录相对插件根解析，
-  配置中不包含开发机绝对路径，也不依赖目标项目目录。
-- 界面及 MCP Apps SDK 已打包进插件；用户运行时无需 npm、CDN、API Key 或外部服务。
-- 更新本地安装后，重启 Codex App，并在新会话测试新工具。仅更新文件不意味着
-  已运行会话的 MCP 实例已经刷新。直接调用已有工作流会复用同一份面板规则。
-- 当前自动打开验证环境为 macOS、ChatGPT desktop Codex 26.1103.32239。
-  Windows/Linux 尚未完成 App 验收；若环境使用 `python` 或 `py -3`，需在宿主
-  MCP 启动配置中选用可用的 Python 3.11+ 命令及参数，不能将整条命令写成可执行文件名。
-  CLI、Claude Code 或不支持 MCP Apps 的宿主仍可继续技能工作流和简短文字更新。
+**已加载不等于已执行或成功。** 记录证明加载工具读取了哪份说明，不能证明
+Agent 后续遵守了它，更不是宿主级 Skill 执行审计。仅覆盖经该工具加载的插件
+内 Skill；外部 Skill、宿主自动加载或直接读取但未经过该工具的说明不自动推断。
+没有记录时显示“未记录”，而不是“未使用”。
 
-如果工具不存在或服务不可用，工作流继续正常开发并说明面板不可用，不自动改
-宿主配置、信任权限或安装依赖。用户关闭面板后不会在每次阶段更新时被强制重开；
-需要时可请求 Agent 使用本任务 ID 调用 `open_progress`。
+步骤、当前动作、变更和验证结果由 Agent 根据实际工作申报，界面不推导百分比、
+ETA 或工具活动。验证有独立状态，测试数量必须附简短依据；任务结束不会把
+未执行、失败或部分验证自动改为通过。卡片不运行测试、不读取真实日志。
 
-## 多任务与数据
+## 运行与兼容
 
-每次新任务生成随机 UUID；更新及读取均要求明确的 `run_id`，没有“最近任务”
-查询或全任务列表。面板同时仅绑定一个任务，旧轮询请求、其他任务的读取结果和
-过期 revision 不会覆盖它。若宿主复用右侧面板，只有明确的展示工具结果可
-切换到新任务，切换时丢弃旧请求并恢复刷新。主 Agent 持有任务 ID 与 revision，
-子任务通过主 Agent 汇总状态。
+- PATH 中需要 Python 3.11+；运行服务只使用标准库。
+- 界面和 SDK 已打包，运行时无需 npm、CDN、API Key 或外部服务。
+- portable 注册使用根 `plugin.json` / `mcp.json`，兼容注册使用
+  `.codex-plugin/plugin.json` / `.mcp.json`；启动目录相对插件根解析。
+- 更新插件后用新聊天验证新工具。重启 App 并不保证旧聊天获得新工具；若工具
+  缺失，工作流继续开发并简短说明，不自动修改配置或循环要求重启。
+- 不支持 MCP Apps 的宿主可继续 Skill 和文字工作流。跨平台 App 行为仍需独立验收。
+- 已有 0.1.13 快照保留且可读取；缺少新增字段时显示未记录/未申报，不补造历史。
 
-工具接受短标题、单行阶段摘要和最多 12 个步骤，拒绝未知字段、重复 JSON 键、
-超长请求和矛盾的完成声明。并发更新通过事务和 `expected_revision` 处理；相同
-更新的丢失响应重试不会重复追加记录。状态为 `completed`、`blocked`、`cancelled`
-后不可再改写；仍需等待输入时使用 `waiting`。
+## 更新与隔离
 
-状态优先保存在 `PLUGIN_DATA/progress-panel`（兼容 `CLAUDE_PLUGIN_DATA`）。
-无宿主数据目录时使用系统用户状态目录：macOS 为
-`~/Library/Application Support/RelayForge/progress-panel`，Windows 为
-`LOCALAPPDATA/RelayForge/progress-panel`，Linux 为
+`start_progress` 创建随机 UUID 并返回完整快照。`update_progress` 在真实阶段
+变化时写入步骤及可选 `details`，返回简短确认。`load_progress_skill` 返回说明
+和新 revision；协调 Agent 必须保留每次写入的 revision。`read_progress` 只供
+卡片读取，`open_progress` 只在用户要求时再显示，不用于刷新。
+
+`details` 可含 `current`、`change`、`remaining` 及 `verification`。验证状态为
+not_run/running/passed/failed/partial/skipped/unavailable；数量可省略，提供时
+要求非负整数及 evidence，拒绝自相矛盾的通过声明。details 整体替换，省略时
+保持原值，因此新检查或需求变化后应主动清除过期结果。
+
+界面每两秒读取绑定任务；更新不触发额外模型调用。没有“最近任务”回退或
+全任务列表。旧请求、其他任务和过期 revision 不覆盖当前视图。并发更新使用
+事务与 expected_revision，相同重试不重复记录。终态不可改写，新尝试使用新 ID。
+
+状态使用 `PLUGIN_DATA/progress-panel`（兼容 `CLAUDE_PLUGIN_DATA`）；缺省为
+macOS 的 `~/Library/Application Support/RelayForge/progress-panel`、Windows 的
+`LOCALAPPDATA/RelayForge/progress-panel`、Linux 的
 `XDG_STATE_HOME/relayforge-development/progress-panel`（缺省 `~/.local/state`）。
-隔离测试可设置 `RELAYFORGE_PROGRESS_DATA_DIR` 或使用服务的 `--data-dir`。
-这些选项只在启动时配置，工具没有文件路径、命令或日志读取参数。
+隔离验证使用 `RELAYFORGE_PROGRESS_DATA_DIR` 或服务 `--data-dir`，工具不接受
+文件路径、命令或日志参数。
 
-新申报会清理超过七天未更新的任务，并最多保留 200 个任务、每任务最近 20 次
-申报。旧任务可能因此不可恢复；缺失时面板报告不可用，不猜测状态。POSIX 数据
-目录和数据库权限限制到当前用户，拒绝符号链接的数据目录或数据库。任务 UUID
-是本地读取范围引用，不是对同用户恶意进程的安全隔离，也不是防篡改审计凭证。
+新申报清理超过七天未更新的任务，最多保留 200 个任务、每任务 20 次历史及
+32 个唯一 Skill 加载记录。POSIX 数据目录/数据库仅当前用户可读写，拒绝数据
+目录或数据库符号链接。任务 ID 是范围引用，不是同用户进程间的安全隔离。
 
-## 构建与检查
+## 验证与限制
 
-界面源文件在 `progress_panel/web/src`，构建产物和第三方许可证随包提交：
+2026-11-08，独立探针 0.0.1 在当前 macOS Codex App 的新聊天中完成内嵌合成
+验收：用户确认聊天内可见；约 52 秒记录 18 次 App 读取与 18 次渲染回执，
+版本推进 2→3→4→5，宿主报告 inline，最终完成。此结果支持内嵌展示与自动更新
+能力，不等于正式插件或真实 Skill 行为已获宿主审计。原聊天未暴露新工具的
+具体根因仍未确定。0.1.13 的旧侧栏验收不作为新版内嵌集成的通过证据。
+
+开发检查：
 
 ```sh
 npm --prefix progress_panel/web ci --ignore-scripts
 npm --prefix progress_panel/web run build
 npm --prefix progress_panel/web test
 python3 -m pytest progress_panel/tests
-python3 -m mypy --strict progress_panel/state.py progress_panel/server.py
+python3 -m mypy --strict progress_panel/state.py progress_panel/server.py progress_panel/skills.py
+python3 -m unittest discover -s tests -v
 ```
 
-pytest/mypy 等仅为开发检查工具，不属于插件运行依赖。已有仓库的标准库
-unittest 检查继续保留。面板测试覆盖并发、任务隔离、重试、结束状态、
-MCP 协议、输出边界和轮询行为；这些检查不替代目标 App 的实际渲染验收。
-
-技能接入细则见[任务进度契约](../skills/task-router/references/progress-panel.md)。
-
-## 本地集成验收
-
-2026-11-07 在当前 macOS Codex App 的 0.1.13 本地预览包中完成合成验收：
-重启后恢复一个任务并连续创建两个新任务，均观察到阶段更新和最终完成状态；
-暂停期间保留旧状态，恢复后同步到最新阶段。预览包关闭 Hook，验收未读取真实日志。
-
-本次宿主为展示调用创建了独立的侧栏标签，连续任务可能留下多个标签；没有
-实测同一界面实例的复用。该兼容分支由前端回归检查覆盖，不能据此宣称宿主会
-始终复用面板。原先“旧内容未切换”的观察来自旧标签，不能单独证明复用故障。
+pytest/mypy 等仅为开发依赖。技能接入细则见
+[内嵌进度契约](../skills/task-router/references/progress-panel.md)。

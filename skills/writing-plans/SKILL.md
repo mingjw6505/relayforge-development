@@ -11,7 +11,7 @@ multi-session work needs a durable plan even if implementation starts now. Annou
 use of this skill briefly in the conversation's language.
 
 Read and apply [progress display](../task-router/references/progress-display.md),
-including for a direct planning-only request. Reuse the task's side panel when
+including for a direct planning-only request. Reuse the task's inline card when
 available; finish the planning scope without implying implementation occurred.
 
 ## Scope and storage

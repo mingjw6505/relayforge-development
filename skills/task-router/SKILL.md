@@ -14,7 +14,7 @@ not a hard dispatcher: hosts may select a skill directly. That skill fills missi
 context without restarting routing or creating a second coordinator.
 
 For implementation tasks, read and apply the shared
-[progress display](references/progress-display.md). Prefer the side panel;
+[progress display](references/progress-display.md). Prefer the inline card;
 keep chat focused on useful findings, blockers and the final result.
 
 ## Inspect once, decide

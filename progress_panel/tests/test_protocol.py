@@ -31,7 +31,7 @@ def rpc(server: ProgressServer, value: object) -> list[dict]:
     return [json.loads(line) for line in output.getvalue().splitlines()]
 
 
-def test_render_and_data_tools_are_distinct_and_resource_is_fullscreen(
+def test_render_and_data_tools_are_distinct_and_resource_is_inline(
     tmp_path: Path,
 ) -> None:
     server = ProgressServer(tmp_path / "state")
@@ -41,8 +41,10 @@ def test_render_and_data_tools_are_distinct_and_resource_is_fullscreen(
     assert definitions["start_progress"]["_meta"]["ui"]["resourceUri"] == RESOURCE_URI
     assert "resourceUri" not in definitions["update_progress"]["_meta"].get("ui", {})
     assert definitions["read_progress"]["_meta"]["ui"]["visibility"] == ["app"]
+    assert "openai/ui" not in definitions["start_progress"]["_meta"]
+    assert definitions["load_progress_skill"]["_meta"]["ui"]["visibility"] == ["model"]
     resource = server.dispatch("resources/read", {"uri": RESOURCE_URI})["contents"][0]
-    assert resource["_meta"]["openai/ui"]["availableDisplayModes"] == ["fullscreen"]
+    assert resource["_meta"]["openai/ui"]["availableDisplayModes"] == ["inline"]
     assert resource["mimeType"] == "text/html;profile=mcp-app"
     assert "RelayForge" in resource["text"]
     assert not server.directory.exists(), "discovery must not create task state"

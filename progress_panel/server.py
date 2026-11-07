@@ -11,9 +11,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from progress_panel.skills import load_bundled_skill
 from progress_panel.state import ProgressError, ProgressStore
 
-RESOURCE_URI = "ui://relayforge-development/progress-v1.html"
+RESOURCE_URI = "ui://relayforge-development/progress-v2.html"
 MAX_REQUEST_BYTES = 16 * 1024
 STEP_SCHEMA = {
     "type": "array",
@@ -34,6 +35,40 @@ STEP_SCHEMA = {
 }
 ID_SCHEMA = {"type": "string", "format": "uuid"}
 SUMMARY_SCHEMA = {"type": "string", "maxLength": 240}
+DETAILS_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        **{
+            key: {"type": "string", "maxLength": 120}
+            for key in ("current", "change", "remaining")
+        },
+        "verification": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["status"],
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "not_run",
+                        "running",
+                        "passed",
+                        "failed",
+                        "partial",
+                        "skipped",
+                        "unavailable",
+                    ],
+                },
+                **{
+                    key: {"type": "integer", "minimum": 0, "maximum": 1000000}
+                    for key in ("passed", "failed", "pending")
+                },
+                "evidence": {"type": "string", "maxLength": 120},
+            },
+        },
+    },
+}
 
 
 def schema(properties: dict[str, Any], required: list[str]) -> dict[str, Any]:
@@ -50,18 +85,18 @@ def tools() -> list[dict[str, Any]]:
     """Describe render and data tools separately; only reads are app-only."""
     renderer = {
         "ui": {"resourceUri": RESOURCE_URI, "visibility": ["model", "app"]},
-        "openai/ui": {"entrypoints": [{"type": "thread"}]},
     }
     definitions = [
         (
             "start_progress",
-            "打开开发进度",
+            "创建开发进度卡片",
             "Start and display a new development task's progress before implementation. Use concise agent-declared steps; never send prompts, code, commands, credentials or raw logs.",
             schema(
                 {
                     "title": {"type": "string", "minLength": 1, "maxLength": 80},
                     "steps": STEP_SCHEMA,
                     "summary": SUMMARY_SCHEMA,
+                    "details": DETAILS_SCHEMA,
                 },
                 ["title", "steps"],
             ),
@@ -89,6 +124,7 @@ def tools() -> list[dict[str, Any]]:
                     },
                     "steps": STEP_SCHEMA,
                     "summary": SUMMARY_SCHEMA,
+                    "details": DETAILS_SCHEMA,
                 },
                 ["run_id", "expected_revision", "status", "steps"],
             ),
@@ -97,8 +133,24 @@ def tools() -> list[dict[str, Any]]:
             {},
         ),
         (
+            "load_progress_skill",
+            "加载并记录 Skill",
+            "Read this plugin's bundled SKILL.md and record a real instruction-load receipt for this run. Apply the returned instructions. Use only when the skill is actually selected; never load planned skills just to fill the card. Loaded is not an execution or success audit. Core workflow loads also select the current workflow. Reuse the returned revision; avoid reloading the same unchanged skill.",
+            schema(
+                {
+                    "run_id": ID_SCHEMA,
+                    "expected_revision": {"type": "integer", "minimum": 1},
+                    "skill": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$"},
+                },
+                ["run_id", "expected_revision", "skill"],
+            ),
+            False,
+            True,
+            {"ui": {"visibility": ["model"]}},
+        ),
+        (
             "open_progress",
-            "重新打开开发进度",
+            "重新显示进度卡片",
             "Reopen an existing task panel only when requested; requires that task's run_id. Does not create or restart work.",
             schema({"run_id": ID_SCHEMA}, ["run_id"]),
             True,
@@ -185,7 +237,10 @@ class ProgressServer:
                 raise ProgressError("invalid_arguments")
             if name == "start_progress":
                 state = self.store.start(
-                    arguments["title"], arguments["steps"], arguments.get("summary", "")
+                    arguments["title"],
+                    arguments["steps"],
+                    arguments.get("summary", ""),
+                    arguments.get("details"),
                 )
             elif name == "update_progress":
                 state = self.store.update(
@@ -194,7 +249,32 @@ class ProgressServer:
                     arguments["status"],
                     arguments["steps"],
                     arguments.get("summary", ""),
+                    arguments.get("details"),
                 )
+            elif name == "load_progress_skill":
+                current = self.store.read(arguments["run_id"])
+                if current["status"] in {"completed", "blocked", "cancelled"}:
+                    raise ProgressError("run_ended")
+                loaded = load_bundled_skill(
+                    Path(__file__).resolve().parent.parent / "skills",
+                    arguments["skill"],
+                )
+                state = self.store.record_skill_load(
+                    arguments["run_id"],
+                    arguments["expected_revision"],
+                    loaded.name,
+                    loaded.digest,
+                    loaded.is_workflow,
+                )
+                return {
+                    "structuredContent": {
+                        "run_id": state["run_id"],
+                        "revision": state["revision"],
+                        "loaded_skill": loaded.name,
+                        "source": "mcp_skill_load",
+                    },
+                    "content": [{"type": "text", "text": loaded.instructions}],
+                }
             else:
                 state = self.store.read(arguments["run_id"])
             if name == "update_progress":
@@ -240,7 +320,10 @@ class ProgressServer:
                 "instructions": (
                     "For software development tasks using RelayForge, call start_progress once "
                     "before substantive work, then update_progress at meaningful milestones and "
-                    "the actual final outcome. Retain the run_id and returned revision. "
+                    "the actual final outcome. Use load_progress_skill only for selected bundled "
+                    "skills to deliver their instructions and record actual loads. Retain the run_id "
+                    "and revision returned by either write tool. Prefer concise current/change/remaining "
+                    "details and evidence-supported verification; never infer a test pass from task completion. "
                     "Send only short agent-declared steps; never raw prompts, code, commands, "
                     "credentials or logs. Do not create panels for unrelated questions. "
                     "Unavailable progress must not block the requested development work."
@@ -276,10 +359,10 @@ class ProgressServer:
                         "text": html,
                         "_meta": {
                             "ui": {
-                                "prefersBorder": True,
+                                "prefersBorder": False,
                                 "csp": {"connectDomains": [], "resourceDomains": []},
                             },
-                            "openai/ui": {"availableDisplayModes": ["fullscreen"]},
+                            "openai/ui": {"availableDisplayModes": ["inline"]},
                         },
                     }
                 ]

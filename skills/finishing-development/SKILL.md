@@ -9,7 +9,7 @@ Use existing acceptance, risk, baseline, finishing choices and authorization.
 Default to minimal finishing; extra work follows the user's selection.
 
 Read and apply [progress display](../task-router/references/progress-display.md)
-when entering finishing, including direct selection. Update the task's side panel
+when entering finishing, including direct selection. Update the task's inline card
 with its actual outcome; keep the final reply concise and evidence-based.
 
 ## Choose finishing scope once

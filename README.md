@@ -123,14 +123,16 @@ Risk is low/medium/high; legacy normal is read as medium.
 
 ## Development progress
 
-Codex desktop can open a task-scoped side panel at the start of development work.
-The bundled local MCP server displays Agent-declared steps, blockers and outcomes;
-the panel refreshes itself. Python 3.11+ is required; npm, an API key, Hook trust
+Codex desktop can display a compact inline card at the start of development work.
+The bundled local MCP server displays current work, changes, verification and blockers;
+the card refreshes itself. Selected bundled Skills can be loaded through the MCP
+tool to produce actual instruction-read receipts, shown separately from declared
+work and verification. Python 3.11+ is required; npm, an API key, Hook trust
 and raw logs are not required at runtime. See [setup and limits](docs/progress-panel.md).
 
 The five core workflows share one task's progress across transitions. Chat carries
 useful findings, blockers and the final result, without a duplicate checklist or
-fixed metadata footer. When the panel is unavailable, concise plain-language
+fixed metadata footer. When the card is unavailable, concise plain-language
 updates provide a fallback. Planned work and Skill names are not execution evidence.
 See [progress display probes](docs/task-router-test-cases.md#progress-display-probes).
 

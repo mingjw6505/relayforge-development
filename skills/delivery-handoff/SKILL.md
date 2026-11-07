@@ -10,7 +10,7 @@ directly, inspect those facts without restarting implementation, tests or review
 The testing agent independently chooses tests and reaches its own conclusions.
 
 Read and apply [progress display](../task-router/references/progress-display.md),
-including for direct handoff requests. Reuse the task's side panel when available;
+including for direct handoff requests. Reuse the task's inline card when available;
 report actual handoff readiness and any blocker without a duplicate chat checklist.
 
 ## Select the form

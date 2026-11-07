@@ -11,7 +11,7 @@ authorization. If invoked directly, infer these from the request and affected
 code instead of starting another routing conversation.
 
 Read and apply [progress display](../task-router/references/progress-display.md),
-including when selected directly. Reuse the task's side panel across route
+including when selected directly. Reuse the task's inline card across route
 changes; keep chat updates meaningful and report only evidence-supported work.
 
 Standard=L2 uses minimal specification-driven development (SDD); Large=L3
