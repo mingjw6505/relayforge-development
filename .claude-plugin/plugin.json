@@ -1,10 +1,11 @@
 {
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "relayforge-development",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "Reusable software development workflows for RelayForge projects.",
   "author": {
     "name": "RelayForge"
   },
-  "repository": "https://github.com/mingjw6505/relayforge-development"
+  "repository": "https://github.com/mingjw6505/relayforge-development",
+  "mcpServers": "./.mcp.json"
 }

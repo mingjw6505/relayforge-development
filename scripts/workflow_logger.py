@@ -53,21 +53,6 @@ TRANSITION_REASONS = {
     ("L3", "L2"): {"coordination_unnecessary"},
     ("L2", "L1"): {"scope_simplified"},
 }
-ROUTE_LINE_PATTERN = re.compile(
-    r"^Workflow route: (Quick|Standard|Large) \| Work surfaces: "
-    r"([a-z0-9-]+(?:, [a-z0-9-]+)*|none) \| Planned skills: "
-    r"([a-z0-9-]+(?:, [a-z0-9-]+)*|none)[ \\t]*$",
-    re.MULTILINE,
-)
-STATUS_LINE_PATTERN = re.compile(
-    r"^Workflow status: Implementation=(complete|blocked) \| "
-    r"Minimal checks=(passed|failed|partial|unavailable) \| "
-    r"Test verification=(passed|failed|partial|skipped|unavailable) \| "
-    r"Code review=(passed|findings-open|skipped|unavailable) \| "
-    r"Commit=(completed|skipped|blocked|unavailable) \| "
-    r"Push=(completed|skipped|blocked|unavailable)[ \\t]*$",
-    re.MULTILINE,
-)
 
 
 def utc_now() -> datetime:
@@ -234,44 +219,6 @@ def tool_outcome(event: Dict[str, Any]) -> str:
     return "completed"
 
 
-def route_record(event: Dict[str, Any], now: datetime) -> Optional[Dict[str, Any]]:
-    """Extract explicitly declared routing metadata without persisting the reply."""
-    message = event.get("last_assistant_message")
-    if not isinstance(message, str):
-        return None
-    match = ROUTE_LINE_PATTERN.search(message)
-    if not match:
-        return None
-    record = base_record(event, "routing_decision", now)
-    record["route"] = match.group(1).lower()
-    surfaces = match.group(2)
-    record["work_surfaces"] = [] if surfaces == "none" else surfaces.split(", ")
-    selected = match.group(3)
-    record["planned_skills"] = [] if selected == "none" else selected.split(", ")
-    return record
-
-
-def status_record(event: Dict[str, Any], now: datetime) -> Optional[Dict[str, Any]]:
-    """Extract the declared finishing state without persisting the reply."""
-    message = event.get("last_assistant_message")
-    if not isinstance(message, str):
-        return None
-    match = STATUS_LINE_PATTERN.search(message)
-    if not match:
-        return None
-    record = base_record(event, "workflow_status", now)
-    keys = (
-        "implementation",
-        "minimal_checks",
-        "test_verification",
-        "code_review",
-        "commit",
-        "push",
-    )
-    record.update(zip(keys, match.groups()))
-    return record
-
-
 def handle_event(event: Dict[str, Any], root: Path, now: Optional[datetime] = None, monotonic_ns: Optional[int] = None) -> bool:
     """Persist one supported hook event without retaining its prompt or payload."""
     event_name = event.get("hook_event_name")
@@ -340,13 +287,6 @@ def handle_event(event: Dict[str, Any], root: Path, now: Optional[datetime] = No
         output_name = simple_events.get(event_name)
         if output_name:
             append_record(root, base_record(event, output_name, current_time), current_time)
-            if event_name == "Stop":
-                planned_route = route_record(event, current_time)
-                if planned_route:
-                    append_record(root, planned_route, current_time)
-                finishing_status = status_record(event, current_time)
-                if finishing_status:
-                    append_record(root, finishing_status, current_time)
             return event_name in {"Stop", "SubagentStop"}
 
     return event_name in {"Stop", "SubagentStop"}

@@ -10,9 +10,9 @@ the conversation. Reuse an existing spec/plan. Small authorized tasks stay inlin
 multi-session work needs a durable plan even if implementation starts now. Announce
 use of this skill briefly in the conversation's language.
 
-Read and apply [progress in the conversation](../task-router/references/progress-display.md),
-including for a direct planning-only request. Reuse any existing progress view;
-show the actual planning steps and close it when the requested plan is checked.
+Read and apply [progress display](../task-router/references/progress-display.md),
+including for a direct planning-only request. Reuse the task's side panel when
+available; finish the planning scope without implying implementation occurred.
 
 ## Scope and storage
 

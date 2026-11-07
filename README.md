@@ -121,23 +121,18 @@ skills infer missing context. Routes adjust when new design or coordination fact
 appear, preserving tasks, valid evidence, authorization and cumulative fix counts.
 Risk is low/medium/high; legacy normal is read as medium.
 
-## Conversation progress
+## Development progress
 
-The five core workflows (`task-router`, `writing-plans`, `development-workflow`,
-`finishing-development` and `delivery-handoff`) share a compact progress view in
-the conversation, including direct planning or handoff requests: the current
-workflow, completed work, the current step, remaining steps and any blocker.
-The same view continues across workflow transitions. Failed and skipped steps
-remain distinct from completed work; planning-only requests end at the plan.
-Updates follow meaningful changes rather than every tool call. The
-agent reports its own task state, not a host-verified history of Skill loads;
-planned or skipped work is never presented as completed. When intermediate
-messages are unavailable, the final response carries the status instead.
-This requires no telemetry hook or separate service, but depends on the host
-selecting the relevant workflow and displaying intermediate messages.
-Standalone specialist Skills do not automatically load these core instructions.
-See [conversation progress probes](docs/task-router-test-cases.md#conversation-progress-probes)
-for behavioral acceptance; structural tests alone do not establish host behavior.
+Codex desktop can open a task-scoped side panel at the start of development work.
+The bundled local MCP server displays Agent-declared steps, blockers and outcomes;
+the panel refreshes itself. Python 3.11+ is required; npm, an API key, Hook trust
+and raw logs are not required at runtime. See [setup and limits](docs/progress-panel.md).
+
+The five core workflows share one task's progress across transitions. Chat carries
+useful findings, blockers and the final result, without a duplicate checklist or
+fixed metadata footer. When the panel is unavailable, concise plain-language
+updates provide a fallback. Planned work and Skill names are not execution evidence.
+See [progress display probes](docs/task-router-test-cases.md#progress-display-probes).
 
 ## Testing handoff
 
@@ -161,17 +156,18 @@ and [implementation progress](docs/relayforge-v2.1-implementation-progress.md).
 
 Codex desktop users can review and trust the bundled Hook to record local,
 metadata-only telemetry for plugin-enabled sessions. It records Hook events,
-tool names, timing, and hashed technical identifiers; when the router is used,
-it also records its declared route, generic work surfaces, planned Skills, and
-declared finishing states. It does not record
+tool names, timing, and hashed technical identifiers. It does not parse assistant
+replies for routing or finishing metadata. It does not record
 prompts, commands, source, patches, tool input/output, credentials, or
 environment variables. Codex does not expose a reliable Skill-load event, so
 planned Skills are not reported as confirmed Skill usage.
 
 The optional --record-workflow-event stdin mode records bounded, agent-declared
 route selections/changes and finishing/handoff summaries without replacing the
-Hook protocol. The analyzer keeps these separate from legacy final-line metadata
-and host events, detects replays/gaps/conflicts, and never infers missing history.
+Hook protocol. The analyzer still reads historical final-line metadata separately
+from structured declarations and host events, detects replays/gaps/conflicts, and
+never infers missing history. The progress panel does not automatically write to
+this telemetry interface.
 
 Logs are written under Codex's plugin data directory and retained for 30 days.
 Isolated forward tests can redirect this logger with

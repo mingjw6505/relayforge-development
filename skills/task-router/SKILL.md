@@ -13,9 +13,9 @@ The primary agent is the single coordinator. This is a recommended entrypoint,
 not a hard dispatcher: hosts may select a skill directly. That skill fills missing
 context without restarting routing or creating a second coordinator.
 
-For implementation tasks, read and apply the conversation progress display in
-[progress in the conversation](references/progress-display.md). Show actual
-completed, current, remaining and blocked work as it becomes known.
+For implementation tasks, read and apply the shared
+[progress display](references/progress-display.md). Prefer the side panel;
+keep chat focused on useful findings, blockers and the final result.
 
 ## Inspect once, decide
 
@@ -122,22 +122,9 @@ After implementation or a blocker, use
 [finishing-development](../finishing-development/SKILL.md).
 
 Keep communication proportional; do not make the user approve internal routing.
-When this router ran, include exactly one plain final metadata line:
-
-```text
-Workflow route: Standard | Work surfaces: diagnosis | Planned skills: none
-```
-
-Values are illustrative. Surfaces are `frontend`, `backend`, `data`, `container`,
-`diagnosis`, `integration` or `general`; `full-stack` is a dependency marker,
-and tests are evidence, not separate work-surface labels. List selected domain skills,
-excluding core workflow skills; `none` means none selected. Preserve announced
-selections and explain later changes instead of silently dropping them. This line
-is a declared plan, not proof of skill loading. No trailing spaces/hard break.
-
-Keep Quick/Standard/Large in this legacy line; use execution_mode L1/L2/L3 and
-route_policy_version v2.1 in structured decisions. The final line describes the
-current route, not a history of intermediate changes.
+Keep route decisions, work surfaces and selected skills in task context or an
+existing plan/checkpoint. Structured declarations use execution_mode L1/L2/L3
+and route_policy_version v2.1. Do not require a routing footer in the final reply.
 
 Before replying after an implementation route, including Quick, read and apply
 finishing-development using the evidence already collected. This closes the same

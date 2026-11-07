@@ -9,9 +9,9 @@ Reuse finishing's integrated changes, acceptance, evidence and gaps. When invoke
 directly, inspect those facts without restarting implementation, tests or review.
 The testing agent independently chooses tests and reaches its own conclusions.
 
-Read and apply [progress in the conversation](../task-router/references/progress-display.md),
-including for direct handoff requests. Reuse any existing progress view; show
-evidence reconciliation, handoff preparation and its actual readiness or blocker.
+Read and apply [progress display](../task-router/references/progress-display.md),
+including for direct handoff requests. Reuse the task's side panel when available;
+report actual handoff readiness and any blocker without a duplicate chat checklist.
 
 ## Select the form
 

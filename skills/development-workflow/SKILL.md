@@ -10,9 +10,9 @@ Reuse the router's acceptance, dependencies, risk, selected skills, budget and
 authorization. If invoked directly, infer these from the request and affected
 code instead of starting another routing conversation.
 
-Read and apply [progress in the conversation](../task-router/references/progress-display.md),
-including when this workflow is selected directly. Reuse the existing progress
-view across route changes and report only work actually completed.
+Read and apply [progress display](../task-router/references/progress-display.md),
+including when selected directly. Reuse the task's side panel across route
+changes; keep chat updates meaningful and report only evidence-supported work.
 
 Standard=L2 uses minimal specification-driven development (SDD); Large=L3
 adds durable dependency coordination. A primary agent can coordinate sequentially.

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>RelayForge · 开发进度</title>
+  <style>
+    :root{color-scheme:light;--paper:#f4f1e9;--ink:#242a28;--muted:#65706a;--line:#d9ded4;--accent:#246b52;--wash:#e4ede3;--warning:#98531e;--mono:"SFMono-Regular",Consolas,"Liberation Mono",monospace}
+    :root[data-theme=dark]{color-scheme:dark;--paper:#17201d;--ink:#edf0e5;--muted:#a4b1a8;--line:#34423b;--accent:#9dcead;--wash:#243c30;--warning:#e6b17c}
+    *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--paper);color:var(--ink)}body{font:14px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;padding:24px;max-width:900px;margin:auto}button{font:inherit;color:var(--ink)}[hidden]{display:none!important}
+    header{display:flex;justify-content:space-between;align-items:center;padding-bottom:20px;border-bottom:1px solid var(--line)}.brand{font:700 16px Georgia,"Times New Roman",serif;letter-spacing:.03em}.edition{font:10px var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:.15em}h1{font-size:24px;line-height:1.4;font-weight:600;letter-spacing:-.03em;margin:25px 0 12px;overflow-wrap:anywhere}.status{display:inline-flex;gap:7px;align-items:center;font-size:12px;color:var(--accent);background:var(--wash);padding:4px 10px;border-radius:3px}.status:before{content:"";height:6px;width:6px;background:currentColor;border-radius:50%}body[data-status=blocked] .status,body[data-status=waiting] .status{color:var(--warning)}
+    .summary{color:var(--muted);min-height:44px;margin:16px 0 22px;overflow-wrap:anywhere}.metrics{display:grid;grid-template-columns:1fr 1fr;padding:18px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-bottom:20px}.metric+.metric{border-left:1px solid var(--line);padding-left:24px}.value{font:27px var(--mono);letter-spacing:-.05em}.caption{display:block;font-size:11px;color:var(--muted);margin-top:5px}.section-title{font:11px var(--mono);letter-spacing:.12em;color:var(--muted);margin:24px 0 10px}ol{list-style:none;padding:0;margin:0}#steps li{display:flex;align-items:center;gap:12px;position:relative;min-height:56px}#steps li:not(:last-child):before{content:"";position:absolute;left:14px;top:43px;height:25px;border-left:1px solid var(--line)}.marker{flex:none;display:grid;place-items:center;width:30px;height:30px;border:1px solid var(--line);border-radius:50%;font:11px var(--mono);background:var(--paper);color:var(--muted)}.step-label{flex:1;overflow-wrap:anywhere}.step-state{font-size:11px;color:var(--muted);white-space:nowrap}[data-state=active] .marker,[data-state=done] .marker{background:var(--accent);border-color:var(--accent);color:var(--paper)}[data-state=active] .step-label{font-weight:650}[data-state=blocked] .marker{color:var(--warning);border-color:var(--warning)}[data-state=skipped] .step-label{color:var(--muted);text-decoration:line-through}
+    #history{font-size:12px}#history li{display:grid;grid-template-columns:66px 1fr;gap:12px;padding:8px 0;border-bottom:1px solid var(--line)}#history time{font-family:var(--mono);color:var(--muted);font-size:10px;padding-top:3px}#history span{overflow-wrap:anywhere}footer{margin-top:30px;border-top:1px solid var(--line);padding-top:16px;color:var(--muted);font-size:11px}.sync{display:flex;justify-content:space-between;align-items:center;gap:12px}#connection[data-state=disconnected]{color:var(--warning)}button{background:transparent;border:1px solid var(--line);border-radius:3px;padding:5px 10px;font-size:11px;cursor:pointer}button:disabled{cursor:default;opacity:.6}button:focus-visible{outline:2px solid var(--accent);outline-offset:3px}#empty{padding:38px 0;color:var(--muted)}#stale{padding:12px;border-left:2px solid var(--warning);color:var(--warning);font-size:12px}footer p{margin:9px 0}.version{font-family:var(--mono);font-size:10px}@media(max-width:360px){body{padding:16px}h1{font-size:21px}.value{font-size:23px}.metric+.metric{padding-left:15px}}@media(prefers-reduced-motion:no-preference){#task{animation:arrive .2s ease-out}@keyframes arrive{from{opacity:.4;transform:translateY(4px)}to{opacity:1;transform:none}}}
+  </style>
+</head>
+<body>
+  <header><span class="brand">RelayForge</span><span class="edition">Development / Progress</span></header>
+  <p id="empty" role="status">正在等待本任务的进度关联…</p>
+  <main id="task" hidden>
+    <h1 id="title">开发任务</h1><span id="status" class="status" role="status">进行中</span>
+    <p id="summary" class="summary"></p>
+    <div class="metrics"><div class="metric"><span id="count" class="value">—</span><span id="count-label" class="caption">步骤已完成</span></div><div class="metric"><span id="elapsed" class="value">00:00</span><span class="caption">任务经过时间</span></div></div>
+    <p class="section-title">工作步骤</p><ol id="steps" aria-label="任务步骤"></ol>
+    <p id="stale" hidden>暂未收到新的阶段申报。面板连接正常不代表任务仍在执行。</p>
+    <p class="section-title">最近更新</p><ol id="history" aria-label="最近更新"></ol>
+    <p class="caption">最后申报 <time id="updated">—</time></p>
+  </main>
+  <footer><div class="sync"><span id="connection" role="status">正在连接</span><button id="refresh" type="button">暂停刷新</button></div><p id="connection-note">阶段由 Agent 更新，面板自动同步。</p><p>此视图展示 Agent 申报的任务状态，不读取原始日志，不推算完成百分比。</p><span class="version">RelayForge {{VERSION}}</span></footer>
+  <script type="module">{{SCRIPT}}</script>
+</body>
+</html>

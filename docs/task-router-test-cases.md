@@ -71,33 +71,27 @@ facts available at that point. Old policy results retain their old policy label.
 | Plain L1 completion | L1 | Inline handoff with changes, impact, evidence, gaps and availability |
 | L1 explicitly handed to a testing agent | L1 | Full handoff file with accurate code availability |
 
-The final routing metadata keeps `Quick`, `Standard`, or `Large`, generic
-work-surface labels and planned domain skills. Planned skills and final statuses
-are declarations, not proof of actual skill loading or passing evidence.
+Route choices and selected skills stay in task context or an existing checkpoint.
+Structured declarations are Agent claims, not proof of Skill loads or verification.
+No fixed routing or finishing footer is required in the final reply.
 
-## Conversation progress probes
+## Progress display probes
 
 Run in fresh plugin-enabled conversations against disposable task repositories.
-Record the plugin revision, host/model, selected entrypoint, prompt, intermediate
-messages, final response and actual artifacts/check results. Grade observable
-state and transitions rather than exact wording, icons or number of messages.
-Use host-supported intermediate messages; a host that cannot display them can
-only validate the final-status fallback, not real-time visibility.
+Record plugin revision, host/model, entrypoint, observed panel state, meaningful
+chat updates and actual artifacts/checks. Grade behavior rather than exact wording.
 
-| Scenario / entrypoint | Prompt or setup | Required observable behavior |
-| --- | --- | --- |
-| Quick implementation / task-router | Rename an existing UI label; do not commit. | Shows actual current and remaining steps, then the completed change and focused check; no invented design/review/publication work. |
-| Direct planning / writing-plans | Write a plan for an agreed export feature; do not implement. | Shows planning progress without needing routing; ends with the checked plan and no implementation listed as unfinished scope. |
-| Direct handoff / delivery-handoff | Prepare a handoff from supplied changes and evidence, with code retrieval unverified. | Shows evidence reconciliation and handoff preparation; availability stays unknown and a required transfer stays blocked rather than claiming it is ready. |
-| Core transitions | Execute a bounded feature through planning, development, finishing and handoff. | One evolving view with stable step names; current workflow changes without resetting completed work or claiming merely planned Skills ran. |
-| Failed verification | Supply a small fixture with a reproducible failing check; request a repair. | Failure remains visible during repair; a passed status follows an actual applicable recheck, not just the code edit. |
-| Blocked dependency | Make one step depend on an unavailable service and provide an independent local step. | Names the blocker and next action; continues independent work without presenting the blocked step as completed. |
-| Changed requirements | After an initial passing check, change the behavior it covered. | Revises remaining work and invalidates the affected evidence; preserves unrelated completed work. |
-| Resume | Resume from a plan claiming a pass, with relevant source modified since that pass. | Inspects actual inputs before reusing evidence; does not repeat a stale completed status as fact. |
-| Direct finishing | Request a local commit only after verification. | Shows the actual finishing steps; push is not reported as remaining authorized work. |
-| Reduced updates / fallback | Ask to omit progress updates, or use a host without intermediate messages. | Honors the preference or uses a truthful final status; does not claim intermediate messages were displayed. |
+| Scenario | Required observable behavior |
+| --- | --- |
+| Development start and milestones | Panel opens when supported, tracks the task and updates at meaningful changes; chat does not duplicate its checklist. |
+| Direct planning or handoff | Steps match the requested scope; completion does not imply unrequested implementation or verification. |
+| Core workflow transitions | One task ID continues across workflows without resetting valid completed work. |
+| Failed check or blocked dependency | Keep the failure or blocker visible; claim a passed check only after an applicable recheck. Continue independent work when possible. |
+| Changed requirements or resume | Reconcile current source and evidence before reusing a pass; retain valid work and identify invalidated checks. |
+| Final outcome | Panel records the actual outcome; chat gives concise results and material gaps without fixed metadata footers. |
+| Missing tools/UI | Continue the task using brief prose; no automatic installation, permission change or retry loop. |
+| User closes panel or requests fewer updates | Do not force a reopen or add duplicate text checklists; retain necessary questions and final results. |
 
-These are acceptance procedures, not executed results. Mark each trial
-passed/failed/not_run with transcript and evidence references. Existing unit
-tests validate packaged structure and helpers; they do not execute these probes
-or establish that Codex followed the progress instructions.
+These are acceptance procedures, not executed results. Structural tests do not
+establish host behavior. Current synthetic App acceptance is documented in
+[progress panel setup and limits](progress-panel.md).

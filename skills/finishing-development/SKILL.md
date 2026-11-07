@@ -8,9 +8,9 @@ description: Finish implementation with minimal checks and user-selected extra t
 Use existing acceptance, risk, baseline, finishing choices and authorization.
 Default to minimal finishing; extra work follows the user's selection.
 
-Read and apply [conversation progress](../task-router/references/progress-display.md)
-when entering finishing, including when this skill is selected directly. Reuse
-the existing view and update it when the outcome or a blocker is known.
+Read and apply [progress display](../task-router/references/progress-display.md)
+when entering finishing, including direct selection. Update the task's side panel
+with its actual outcome; keep the final reply concise and evidence-based.
 
 ## Choose finishing scope once
 
@@ -130,18 +130,11 @@ substantial task include the method choice and any measured cost/limit; a Quick
 task needs no process essay. `passed` means the agreed risk-proportional scope
 passed, not every possible test. Declined required checks stay skipped/partial.
 
-Use the existing declared-status vocabulary:
+Use natural language for the final outcome and relevant check results. Do not
+require a fixed finishing-status footer or repeat every unselected operation.
+When recording structured declarations, retain the existing status enums and
+separate implementation, verification, review and publication outcomes.
 
-```text
-Workflow status: Implementation=complete | Minimal checks=passed | Test verification=passed | Code review=skipped | Commit=skipped | Push=skipped
-```
-
-Allowed values: Implementation `complete|blocked`; Minimal checks
-`passed|failed|partial|unavailable`; Test verification
-`passed|failed|partial|skipped|unavailable`; Code review
-`passed|findings-open|skipped|unavailable`; Commit/Push
-`completed|skipped|blocked|unavailable`.
-
-Label a passed non-independent review explicitly in prose. Missing required
-independence is `unavailable`. If a required gate is missing, say `实现完成，未验证`
-or `实现完成，未审查` as applicable. Never describe blocked implementation as complete.
+Label a passed non-independent review explicitly. Missing required independence
+is unavailable. If a required gate is missing, say `实现完成，未验证` or
+`实现完成，未审查` as applicable. Never describe blocked implementation as complete.

@@ -9,7 +9,7 @@ expecting files.
 
 ## First-use check
 
-1. Install or refresh RelayForge and confirm the installed manifest is `0.1.9`.
+1. Install or refresh RelayForge and confirm the installed plugin version.
 2. In Codex desktop, open **Settings > Hooks** or **Review hooks** in the
    composer. In the CLI, use `/hooks`. Find the RelayForge source, review its
    commands and trust it. Installation alone does not enable collection; an
@@ -64,11 +64,12 @@ PLUGIN_DATA/logs/events-YYYY-MM-DD.jsonl
 
 Records include the Hook event name, timestamp, hashed session/turn/tool IDs,
 model name, permission mode, tool name, tool completion outcome, and timing.
-When `task-router` supplies its required final metadata line, the Hook also
-records its Quick/Standard/Large decision, generic work surfaces, and planned
-Skill names. When `finishing-development` supplies its status line, the Hook
-records the declared implementation, checks, verification, review, commit, and
-push states.
+Starting with 0.1.13, the Hook no longer parses assistant replies for routing or
+finishing metadata. Stop records only the turn lifecycle event; fixed chat
+metadata footers are no longer required. The analyzer continues to read existing
+`routing_decision` and `workflow_status` records. New routing and verification
+statistics require explicit structured declarations through the interface below;
+the MCP progress panel does not automatically produce these telemetry events.
 The logger retains 30 calendar days, prunes unfinished tool-pair state after
 24 hours, and serializes concurrent writers with a short lock file.
 
@@ -95,7 +96,7 @@ names so `PreToolUse` and `PostToolUse` can be paired.
 - `Stop` and `Interrupt`
 
 The data represents the plugin-enabled session's observable activity, not an
-audit log of every plugin or Skill invocation. Router data is a declared plan,
+audit log of every plugin or Skill invocation. Structured router data is a declared plan,
 not confirmation that Codex loaded a Skill. Codex does not offer a stable Hook
 event for a Skill load. The telemetry can show tool-call patterns and time
 spent in local tools, but it cannot claim which Skills Codex actually loaded.
@@ -197,8 +198,8 @@ It deduplicates event_id using business fields, excluding reception timestamps;
 conflicting IDs/sequences, missing selections, gaps, discontinuities and events
 after completion make history partial. Final routes are reported only for intact
 histories; observed transition counts do not prove a partial run's full history.
-An open history can be intact but not ended. Legacy final route lines are never
-added to the new task count. Missing events are not inferred.
+An open history can be intact but not ended. Historical final-line records are
+never added to the new task count. Missing events are not inferred.
 
 Actual agent counts use existing observed Subagent lifecycle events only where
 available. Planned skills are not actual loads; overlapping writers or tokens
