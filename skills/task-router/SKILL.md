@@ -39,6 +39,25 @@ low risk, but can still be Quick when its contract and fix are settled. Read
 [acceptance and risk](../development-workflow/references/acceptance-and-risk.md)
 only for ambiguity, material boundaries or an effort-limit decision.
 
+## Optional delivery breakdown
+
+Ticket-only requests go to [to-tickets](../to-tickets/SKILL.md) and stop after
+the breakdown. Technical planning-only requests go to writing-plans. Neither
+request authorizes implementation.
+
+For implementation, reuse existing tickets and agreements. When agreed requirements
+need distinct delivery slices for scheduling or handoff, select to-tickets before
+technical planning; it also accepts agreement from the current conversation without
+a product plugin or formal specification file. Skip it for a small local change,
+usable existing tickets or work manageable directly in one plan. L3 alone does not
+require tickets. Reuse prior approval; ask only about consequential unresolved
+choices, not the internal route. After breakdown, route the selected ticket(s)
+using this same task context, without generating tickets again.
+
+Tickets define delivery outcomes, scope, acceptance and delivery dependencies.
+Writing-plans adds implementation paths, contracts, technical tasks and checks
+without duplicating the ticket backlog. Preserve IDs and acceptance by reference.
+
 ## Route and compose
 
 | Route | When | Execution |
@@ -56,7 +75,8 @@ Unsettled product intent is a decision gap, not a reason to increase route size.
 
 - **SDD (specification-driven):** use agreed conversation/acceptance for small work;
   persist decisions and dependencies for multi-session, deferred or handed-off work.
-  Planning-only requests go directly to writing-plans and stop with the plan.
+  Technical planning-only requests go directly to writing-plans and stop with the
+  plan; delivery-breakdown requests use the optional ticket step above.
 - **TDD:** prefer a failing behavior test then one implementation slice for business
   rules, bug regressions and high-risk invariants. Mechanical edits need a focused
   result check, not an invented unit test. Development-workflow owns the loop.

@@ -5,9 +5,10 @@
 This repository packages reusable agent skills, a local MCP progress server and
 optional Codex Hook telemetry. It is not a RelayForge application service.
 
-- `skills/`: 18 skill entrypoints plus supporting scripts, references and assets.
+- `skills/`: 19 skill entrypoints plus supporting scripts, references and assets.
   The core workflows are `task-router`, `development-workflow`, `writing-plans`,
   `finishing-development` and `delivery-handoff`.
+  `to-tickets` is an optional delivery-breakdown step before technical planning.
 - `plugin.json`, `.codex-plugin/plugin.json`, `.claude-plugin/plugin.json`:
   portable, Codex and Claude Code metadata.
 - `mcp.json` and `.mcp.json`: portable and compatibility progress registrations.
@@ -35,6 +36,15 @@ optional Codex Hook telemetry. It is not a RelayForge application service.
 - Read the affected skill and its needed references before changing its contract.
   Keep routing, implementation, planning, finishing and handoff guidance consistent.
   Route size and risk are separate; small edits do not need a formal plan or agents.
+- Keep `to-tickets` independent of product-plugin files, tools and state schemas.
+  Accept agreed conversation requirements or existing specifications/issues.
+  Select it only for requested/useful delivery breakdowns; existing tickets,
+  small changes and Large/L3 alone must not trigger mandatory ticket generation.
+- Tickets own delivery IDs, scope, acceptance, dependencies and agreement.
+  `writing-plans` references these and owns technical tasks, paths, contracts,
+  checks and execution state. Preserve IDs, avoid duplicate breakdowns/status
+  ledgers, and resolve affected scope changes without repeating prior approvals.
+  Ticket agreement does not imply implementation or publication authorization.
 - Preserve the single-primary-writer default. Optional workflows do not add default
   phases or authorize delegation, commit, push or deployment beyond host/user policy.
 - Keep README setup, layout and validation commands aligned with actual files.
@@ -45,6 +55,9 @@ optional Codex Hook telemetry. It is not a RelayForge application service.
 - Keep internal plans and local artifacts in the established ignored locations
   (`.relayforge/`, `.codex-log/`, `docs/relayforge/`); verify visibility for requested
   public deliverables. Never include user logs, credentials or machine-specific paths.
+- Internal tickets default to `.relayforge/tickets/`; requested shared/versioned
+  sets follow public project conventions or `docs/tickets/`. Verify ignore status
+  before writing; do not silently place shared tickets in ignored `docs/relayforge/`.
 
 ## Progress panel and telemetry
 

@@ -1,6 +1,6 @@
 ---
 name: writing-plans
-description: Persist agreed requirements and an implementation dependency plan for multi-session work, deferred execution, handoff or an explicit plan request. Skip formal plans for small tasks that fit the current conversation.
+description: Persist technical implementation decisions, tasks and checks for multi-session work, deferred execution, handoff or an explicit implementation-plan request. Consume existing tickets; skip delivery-ticket breakdowns and formal plans for small tasks that fit the conversation.
 ---
 
 # Writing Plans
@@ -33,6 +33,18 @@ contains the agreement. Do not copy an entire spec into every task.
 
 ## Decompose for execution
 
+- When delivery tickets exist, retain their IDs, scope, acceptance and delivery
+  dependencies by reference. Add only needed code paths, interface contracts,
+  technical prerequisites and checks; do not regenerate or renumber the backlog.
+  Map technical task IDs to their source ticket IDs. The plan owns technical task
+  execution state; tickets own delivery scope and agreement, not a duplicate ledger.
+- A ticket is optional input. Without tickets, plan directly from the agreed
+  requirements. If the request is to create a delivery backlog rather than an
+  implementation plan, use [to-tickets](../to-tickets/SKILL.md) instead. Do not
+  create tickets solely because this plan contains tasks.
+- If technical findings require changing agreed ticket scope or acceptance, surface
+  that specific decision and hold affected work. Preserve independent work and
+  prior authorization; do not silently rewrite agreement or repeat unchanged approvals.
 - Prefer user-visible vertical slices with independently checkable outcomes.
   Include required setup/configuration in the slice that needs it; do not split
   into frontend/backend/data plans by default.
@@ -62,6 +74,7 @@ follow that executor's parser; ordinary execution needs no rigid document schema
 
 **Goal / acceptance:** [observable outcomes, preserved behavior, exclusions]
 **Spec:** [existing source or agreed requirements here; distinguish assumptions]
+**Tickets (if any):** [source index/revision, selected ticket IDs and acceptance references]
 **Approach:** [module ownership, contracts, relevant decisions and source pointers]
 **Execution:** [base/working snapshot, task branch, method and reason, authorization,
 stated budget if any, execution_mode, route history, selected risks and verification]

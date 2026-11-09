@@ -27,6 +27,16 @@ acceptance); Plan (approach, affected contracts/data, risks and checks); Tasks
 existing plans. One combined file or the current context is enough; persist for
 multi-session, deferred work or handoff through writing-plans.
 
+Delivery tickets are optional upstream input. Reuse existing IDs, scope, acceptance
+and delivery dependencies. If authorized work genuinely needs a delivery breakdown
+for scheduling or handoff, use [to-tickets](../to-tickets/SKILL.md) before technical
+planning, reusing any prior routing and agreement. Do not require tickets for every
+Standard/Large task or generate them again after routing. Without tickets, work
+directly from agreed requirements. Writing-plans adds technical tasks, contracts
+and checks under the selected ticket IDs without recreating their scope or status.
+An approved ticket does not itself authorize implementation. Product-scope changes
+need the affected decision resolved; ordinary technical steps reuse authorization.
+
 Do not conduct product discovery or invent unresolved behavior. Return consequential
 product decisions to the user/upstream, continuing independent authorized work.
 Keep execution_mode separate from pending/active/blocked/integrated task states.

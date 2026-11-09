@@ -14,6 +14,7 @@ Claude Code, ChatGPT, and compatible agent hosts.
   bundled `relayforge-progress` stdio server.
 - `skills/` — reusable workflows, one directory per skill.
 - `skills/task-router/` — stack-neutral L1/Quick, L2/Standard and L3/Large routing.
+- `skills/to-tickets/` — optional delivery breakdown from agreed requirements.
 - `skills/development-workflow/` — proportional Standard/Large implementation.
 - `skills/development-workflow/scripts/parallel_worktree.py` — guarded task
   branches and exceptional parallel-worker worktrees.
@@ -33,12 +34,13 @@ Claude Code, ChatGPT, and compatible agent hosts.
 
 ## Skill index
 
-The package contains 18 skill entrypoints. Select capabilities for the actual
+The package contains 19 skill entrypoints. Select capabilities for the actual
 task; the core route does not automatically invoke every bundled skill.
 
 | Area | Skills and purpose |
 | --- | --- |
 | Core workflow | [task-router](skills/task-router/SKILL.md) selects the route; [development-workflow](skills/development-workflow/SKILL.md) implements Standard/Large work; [writing-plans](skills/writing-plans/SKILL.md) persists needed decisions; [finishing-development](skills/finishing-development/SKILL.md) closes work; [delivery-handoff](skills/delivery-handoff/SKILL.md) prepares selected testing transfers. |
+| Optional delivery breakdown | [to-tickets](skills/to-tickets/SKILL.md) turns agreed requirements into local delivery tickets before technical planning when requested or needed for staged delivery, scheduling or handoff. |
 | Frontend | [frontend-design](skills/frontend-design/SKILL.md) guides visual direction; [frontend-patterns](skills/frontend-patterns/SKILL.md) handles nontrivial React/Next.js architecture; [vercel-react-best-practices](skills/vercel-react-best-practices/SKILL.md) provides performance guidance. |
 | Backend and packaging | [java-springboot](skills/java-springboot/SKILL.md), [sql-optimization](skills/sql-optimization/SKILL.md) and [multi-stage-dockerfile](skills/multi-stage-dockerfile/SKILL.md). |
 | Diagnosis and review | [systematic-debugging](skills/systematic-debugging/SKILL.md) handles problems beyond a focused reproduce-and-fix loop; [code-review](skills/code-review/SKILL.md) reviews changes from a fixed Git point with parallel reviewers when compatible with host policy. |
@@ -96,6 +98,42 @@ without modifying the real index. Use a discovered Python interpreter (`python`,
 `python3`, or `py -3`) and Git; this helper and the default workflow need no Bash.
 Use it for mixed Git states or a portable independent review, not every local edit.
 Older SDD shell helpers remain preserved with their upstream workflow.
+
+## Delivery tickets and implementation plans
+
+`to-tickets` is an optional development entry step. It accepts a confirmed
+specification, an existing issue or agreed requirements from the conversation;
+no RelayForge Product plugin, PRD, requirement state or approval ledger is needed.
+It supports conditional automatic selection as well as explicit invocation.
+
+When a breakdown is useful, the flow is:
+
+```text
+Agreed requirements → to-tickets (optional delivery breakdown)
+                   → task-router (selected tickets or direct requirements)
+                   → writing-plans (when technical planning needs persistence)
+                   → development-workflow → finishing-development
+```
+
+The router can select the optional step, then reuse the same task context to
+route the chosen tickets. Ticket-only requests end with the breakdown; technical
+planning-only requests end with the plan. Quick work can implement directly.
+Existing suitable tickets are reused; route size alone never requires tickets.
+
+| Responsibility | `to-tickets` | `writing-plans` |
+| --- | --- | --- |
+| Outcome | Independently demonstrable delivery slices | Technical approach for selected scope |
+| Content | Stable ticket IDs, scope, acceptance, delivery dependencies and agreement | Code paths, contracts, technical prerequisites, checks and execution state |
+| Existing tickets | Reuse and update the same set | Reference their IDs and acceptance; add only missing technical detail |
+| Without tickets | Create only when a breakdown is requested or useful | Plan directly from agreed requirements |
+
+Internal tickets default to ignored `.relayforge/tickets/<requirement-slug>/`.
+Requested shared/versioned tickets follow project conventions or default to
+`docs/tickets/YYYY-MM-DD-<requirement-slug>/`; verify Git visibility before delivery.
+Each set has an index and ticket files. Reuse existing agreement; resolve only
+consequential new decisions. Ticket agreement does not authorize implementation,
+external publication, commit or push. Technical plans do not duplicate ticket
+scope or maintain a second delivery-status ledger.
 
 ## Optional workflow availability
 
