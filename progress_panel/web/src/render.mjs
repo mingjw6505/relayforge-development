@@ -1,0 +1,134 @@
+import {cardView, historyView} from './view.mjs';
+import {terminal} from './poller.mjs';
+
+const stepNames = {pending: '待处理', active: '进行中', done: '已完成', blocked: '受阻', skipped: '已跳过'};
+const stepIcons = {pending: '', active: '', done: '✓', blocked: '!', skipped: '−'};
+const connectionNames = {
+  connecting: '正在同步进度…', synced: '', disconnected: '同步暂时中断，保留最后申报并重试。',
+  paused: '已暂停刷新；任务继续进行。', unavailable: '进度记录已不可用，已停止刷新；保留最后申报。',
+};
+const time = value => {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '时间未记录' : date.toLocaleTimeString([], {hour12: false});
+};
+
+/** Render the real card in either the MCP host or the isolated local preview. */
+export function createPanel(root, {onPauseToggle = () => {}} = {}) {
+  const document = root.ownerDocument;
+  const el = name => root.querySelector(`[data-ui="${name}"]`);
+  let latest = null;
+  let syncState = 'connecting';
+  let allHistory = false;
+  let paused = false;
+
+  function node(tag, value, className = '') {
+    const result = document.createElement(tag);
+    result.textContent = value;
+    if (className) result.className = className;
+    return result;
+  }
+
+  function renderHistory() {
+    const history = latest.history ?? [];
+    const opened = new Set([...el('history').querySelectorAll('details[open]')].map(item => item.dataset.revision));
+    const selected = (allHistory ? history : history.slice(-6)).slice().reverse();
+    el('history').replaceChildren(...selected.map(event => {
+      const view = historyView(event);
+      const item = document.createElement('li');
+      const details = document.createElement('details');
+      details.dataset.revision = String(event.revision);
+      details.open = opened.has(details.dataset.revision);
+      const summary = document.createElement('summary');
+      const at = node('time', time(event.at));
+      if (event.at) at.dateTime = event.at;
+      summary.append(at, node('span', view.title));
+      const body = node('div', '', 'rf-history-body');
+      const lines = [
+        ['当时动作', view.current], ['当时变更', view.change], ['当时剩余', view.remaining],
+        ['等待／受阻原因', view.reason],
+        ['当时验证', view.verification.map(value => value.text).join(' · ')], ['验证依据', view.evidence],
+      ].filter(([, value]) => value);
+      for (const [label, value] of lines) body.append(node('p', `${label}：${value}`));
+      if (!lines.length) body.append(node('p', event.kind === 'skill_loaded'
+        ? '加载工具已读取说明；不代表执行或成功。' : '这条历史未保存更多详情。'));
+      details.append(summary, body);
+      item.append(details);
+      return item;
+    }));
+    el('history-count').textContent = `保留 ${history.length} 条`;
+    el('more-history').hidden = history.length <= 6;
+    el('more-history').textContent = allHistory ? '仅显示最近 6 条' : `展开全部 ${history.length} 条`;
+    el('more-history').setAttribute('aria-expanded', String(allHistory));
+  }
+
+  function syncControls() {
+    const ended = latest && terminal(latest.status);
+    el('refresh').disabled = Boolean(ended || syncState === 'unavailable');
+    el('refresh').textContent = ended ? '任务已结束' : syncState === 'unavailable' ? '记录不可用' : paused ? '恢复刷新' : '暂停刷新';
+  }
+
+  function updateFreshness(now = Date.now()) {
+    const age = now - Date.parse(latest?.updated_at);
+    el('stale').hidden = !(latest?.status === 'running' && syncState === 'synced' && age > 90000);
+  }
+
+  function setConnection(state) {
+    syncState = state;
+    paused = state === 'paused';
+    el('connection').hidden = state === 'synced';
+    el('connection').textContent = connectionNames[state] ?? connectionNames.disconnected;
+    syncControls();
+    updateFreshness();
+  }
+
+  function render(snapshot) {
+    const differentTask = latest?.run_id !== snapshot.run_id;
+    if (differentTask) {
+      allHistory = false;
+      el('records').hidden = true;
+      el('details').setAttribute('aria-expanded', 'false');
+      el('history').replaceChildren();
+    }
+    latest = snapshot;
+    const view = cardView(snapshot);
+    el('empty').hidden = true;
+    el('task').hidden = false;
+    root.dataset.status = snapshot.status;
+    for (const key of ['title', 'status', 'current', 'change', 'remaining', 'phase', 'workflow']) el(key).textContent = view[key];
+    el('current-label').textContent = view.currentLabel;
+    el('phase').hidden = !view.phase;
+    el('change-row').hidden = !view.change;
+    el('remaining-label').textContent = terminal(snapshot.status) ? '剩余' : '下一步';
+    el('verification').replaceChildren(...view.verification.map(item => node('span', item.text, `rf-verification-${item.kind}`)));
+    el('evidence').textContent = view.evidence;
+    el('steps').replaceChildren(...snapshot.steps.map(step => {
+      const item = node('li', '', `rf-step-${step.status}`);
+      const icon = node('span', stepIcons[step.status], 'rf-step-icon');
+      icon.setAttribute('aria-hidden', 'true');
+      if (step.status === 'active') item.setAttribute('aria-current', 'step');
+      item.append(icon, node('span', step.label, 'rf-step-label'), node('span', stepNames[step.status], 'rf-step-status'));
+      return item;
+    }));
+    el('load-section').hidden = view.receipts.length === 0;
+    el('loads').replaceChildren(...view.receipts.map(receipt => {
+      const item = document.createElement('li');
+      item.append(node('time', time(receipt.loaded_at)), node('span', receipt.name, 'rf-load-name'),
+        node('span', `已读取 · ${receipt.sha256.slice(0, 8)}`));
+      return item;
+    }));
+    el('updated').textContent = `阶段申报 ${time(snapshot.updated_at)}`;
+    el('details').firstChild.textContent = view.receipts.length ? `查看记录 · ${view.receipts.length} 项加载` : '查看记录';
+    renderHistory();
+    syncControls();
+    updateFreshness();
+  }
+
+  el('details').onclick = () => {
+    const open = el('details').getAttribute('aria-expanded') !== 'true';
+    el('details').setAttribute('aria-expanded', String(open));
+    el('records').hidden = !open;
+  };
+  el('more-history').onclick = () => {allHistory = !allHistory; renderHistory();};
+  el('refresh').onclick = onPauseToggle;
+  return {render, setConnection, updateFreshness};
+}

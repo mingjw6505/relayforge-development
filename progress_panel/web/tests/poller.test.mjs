@@ -131,3 +131,40 @@ test('a new render can replace the task in a reused panel, discarding the old pe
   assert.equal(s.snapshots.at(-1).revision, 2);
   s.poller.close(); await flush();
 });
+
+test('unchanged revisions update sync status without rebuilding the card', async () => {
+  const s = setup(async () => ({structuredContent: state(1)}));
+  s.poller.bind(state()); s.poller.connected(); await flush();
+  assert.equal(s.snapshots.length, 1);
+  assert.equal(s.states.at(-1), 'synced');
+  s.poller.bind(state());
+  assert.equal(s.snapshots.length, 1);
+  s.poller.close();
+});
+
+test('unknown task stops retries while storage errors remain recoverable', async () => {
+  const s = setup(async () => ({isError: true, structuredContent: {error: 'unknown_run'}}));
+  s.poller.bind(state()); s.poller.connected(); await flush();
+  assert.equal(s.states.at(-1), 'unavailable');
+  assert.equal(s.timers.size, 0);
+  s.poller.pause(); s.poller.resume(); await flush();
+  assert.equal(s.timers.size, 0);
+  s.poller.close();
+  const temporary = setup(async () => ({isError: true, content: [{type: 'text', text: 'storage_unavailable'}]}));
+  temporary.poller.bind(state()); temporary.poller.connected(); await flush();
+  assert.equal(temporary.states.at(-1), 'disconnected');
+  assert.equal(temporary.timers.size, 1);
+  temporary.poller.close();
+});
+
+test('hidden panels suspend reads and immediately refresh when visible', async () => {
+  let calls = 0;
+  const s = setup(async () => {calls++; return {structuredContent: state(2)};});
+  s.poller.setVisible(false); s.poller.bind(state()); s.poller.connected(); await flush();
+  assert.equal(calls, 0);
+  s.poller.setVisible(true); await flush();
+  assert.equal(calls, 1);
+  s.poller.setVisible(false);
+  assert.equal(s.timers.size, 0);
+  s.poller.close();
+});

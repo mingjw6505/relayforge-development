@@ -41,8 +41,9 @@ DETAILS_SCHEMA = {
     "properties": {
         **{
             key: {"type": "string", "maxLength": 120}
-            for key in ("current", "change", "remaining")
+            for key in ("current", "change", "remaining", "reason")
         },
+        "waiting_for": {"type": "string", "enum": ["user", "external"]},
         "verification": {
             "type": "object",
             "additionalProperties": False,

@@ -1,0 +1,25 @@
+<p class="rf-empty" data-ui="empty" role="status">正在载入本任务的进度…</p>
+<article class="rf-card" data-ui="task" aria-label="开发进度" hidden>
+  <header class="rf-top"><span class="rf-brand">RelayForge · 开发进度</span><span class="rf-status" data-ui="status" role="status"></span></header>
+  <h1 data-ui="title"></h1>
+  <p class="rf-phase" data-ui="phase"></p>
+  <div class="rf-work">
+    <div class="rf-row rf-current"><span class="rf-label" data-ui="current-label">当前</span><span class="rf-value" data-ui="current"></span></div>
+    <div class="rf-row rf-change" data-ui="change-row"><span class="rf-label">进展</span><span class="rf-value" data-ui="change"></span></div>
+    <div class="rf-row"><span class="rf-label">验证</span><div class="rf-verification" data-ui="verification" aria-label="Agent 申报的验证结果"></div></div>
+  </div>
+  <p class="rf-stale" data-ui="stale" hidden>阶段暂无新申报；同步正常，长时间检查可能仍在进行。</p>
+  <div class="rf-next"><span class="rf-label" data-ui="remaining-label">下一步</span><span class="rf-value" data-ui="remaining"></span></div>
+  <footer class="rf-footer"><span data-ui="updated"></span><button class="rf-text-button" type="button" data-ui="details" aria-expanded="false" aria-controls="rf-records">查看记录<span class="rf-chevron" aria-hidden="true">⌄</span></button></footer>
+  <section class="rf-records" id="rf-records" data-ui="records" aria-label="阶段与加载记录" hidden>
+    <h2>工作步骤</h2><ol class="rf-steps" data-ui="steps"></ol>
+    <div class="rf-record-heading"><h2>阶段更新</h2><span data-ui="history-count"></span></div>
+    <ol class="rf-history" data-ui="history"></ol>
+    <button class="rf-text-button rf-more" type="button" data-ui="more-history" hidden>展开全部记录</button>
+    <h2>验证依据</h2><p class="rf-evidence" data-ui="evidence"></p>
+    <div data-ui="load-section" hidden><h2>工作流与 Skill 加载</h2><p class="rf-workflow">工作流：<span data-ui="workflow"></span></p><ol class="rf-loads" data-ui="loads"></ol></div>
+    <p class="rf-source">步骤、进展与验证由 Agent 申报。Skill 凭据只证明已读取说明，不代表执行或成功。阶段历史最多保留最近 20 条。</p>
+    <button class="rf-control-button" data-ui="refresh" type="button">暂停刷新</button>
+  </section>
+</article>
+<p class="rf-notice" data-ui="connection" role="status"></p>

@@ -1,9 +1,12 @@
 # Codex 内嵌开发进度卡片
 
 RelayForge Development 0.1.14 将默认展示改为聊天内嵌紧凑卡片。卡片采用已确认
-的灰阶、系统字体、信息行与分隔线，首屏展示任务、工作流、已加载 Skill、当前
-动作、变更、验证与剩余事项。完整步骤、加载记录与验证依据在卡片内展开。
+的灰阶、系统字体、信息行与分隔线，首屏展示任务、当前阶段、动作／最终结果、
+进展、验证与下一步。工作流、加载凭据、完整步骤、阶段历史与验证依据在卡片内展开。
 不再注册 thread 侧栏入口，不默认打开整个侧边应用。
+
+0.1.15 增强阶段历史、等待对象、终态展示、刷新容错与步骤状态标识，提供复用
+正式渲染器的本地模拟预览。
 
 ## 信息来源
 
@@ -39,14 +42,29 @@ ETA 或工具活动。验证有独立状态，测试数量必须附简短依据�
 和新 revision；协调 Agent 必须保留每次写入的 revision。`read_progress` 只供
 卡片读取，`open_progress` 只在用户要求时再显示，不用于刷新。
 
-`details` 可含 `current`、`change`、`remaining` 及 `verification`。验证状态为
+`details` 可含 `current`、`change`、`remaining`、`reason`、`waiting_for` 及
+`verification`。`reason` 是简短的等待／受阻原因，`waiting_for` 为 `user` 或
+`external`。等待对象缺省显示“等待中”；只有明确申报 `user` 才显示“等待你确认”。
+验证状态为
 not_run/running/passed/failed/partial/skipped/unavailable；数量可省略，提供时
 要求非负整数及 evidence，拒绝自相矛盾的通过声明。details 整体替换，省略时
-保持原值，因此新检查或需求变化后应主动清除过期结果。
+保持有效原值，因此新检查或需求变化后应主动清除过期结果。离开等待状态会清除
+`waiting_for`，非等待／受阻状态会清除 `reason`。完成／取消时清除旧动作及剩余事项，
+保留独立验证结论；旧快照在渲染时也不会显示终态与“正在做”矛盾的内容。
 
-界面每两秒读取绑定任务；更新不触发额外模型调用。没有“最近任务”回退或
+界面可见时每两秒读取绑定任务；相同 revision 只更新同步状态，不重建卡片内容。
+页面隐藏时暂停读取，恢复可见后同步；用户手动暂停不会被可见性变化取消。
+更新不触发额外模型调用。没有“最近任务”回退或
 全任务列表。旧请求、其他任务和过期 revision 不覆盖当前视图。并发更新使用
 事务与 expected_revision，相同重试不重复记录。终态不可改写，新尝试使用新 ID。
+
+临时同步失败会保留最后申报并退避重试；任务不存在等永久错误显示“记录不可用”
+并停止轮询。运行中超过 90 秒无阶段申报仅在同步正常时提示，不把等待、长检查或
+断连推断为执行卡死。“阶段申报时间”与连接状态分别显示。
+
+新阶段历史保留当时的简短详情、当前步骤和验证依据，默认最近 6 条，可展开当前
+保留的全部记录（最多 20 条）。旧历史没有的详情不补造。卡片仍是有界的 Agent
+阶段记录，不是原始工具日志或无限审计日志。
 
 状态使用 `PLUGIN_DATA/progress-panel`（兼容 `CLAUDE_PLUGIN_DATA`）；缺省为
 macOS 的 `~/Library/Application Support/RelayForge/progress-panel`、Windows 的
@@ -77,6 +95,17 @@ python3 -m pytest progress_panel/tests
 python3 -m mypy --strict progress_panel/state.py progress_panel/server.py progress_panel/skills.py
 python3 -m unittest discover -s tests -v
 ```
+
+模拟预览复用正式卡片的 `card.html`、`card.css`、`view.mjs` 和 `render.mjs`，
+只使用本地示例数据，不调用 MCP 工具、不改真实任务。生成可嵌入的预览片段：
+
+```sh
+npm --prefix progress_panel/web run preview -- /absolute/path/progress-card-preview.html
+```
+
+可切换进行中、验证中、用户／外部等待、完成（含部分验证）、受阻、取消、断连、
+记录不可用和旧快照；展开记录可回看阶段详情。模拟预览验证展示与交互，不能替代
+插件安装后在真实宿主中的验收。
 
 pytest/mypy 等仅为开发依赖。技能接入细则见
 [内嵌进度契约](../skills/task-router/references/progress-panel.md)。

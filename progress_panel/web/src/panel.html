@@ -1,32 +1,13 @@
 <!doctype html>
-<html lang="zh-CN" data-theme="dark">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RelayForge · 开发进度</title>
-<style>
-  :root{color-scheme:dark;--card:#2c2c2c;--hover:#353535;--text:#f2f2f2;--secondary:#b4b4b4;--muted:#939393;--line:#3c3c3c;--pass:#2fc77b;--fail:#ff5c60}
-  :root[data-theme=light]{color-scheme:light;--card:#f5f5f5;--hover:#e9e9e9;--text:#202020;--secondary:#686868;--muted:#858585;--line:#e1e1e1;--pass:#168552;--fail:#bd3035}
-  *{box-sizing:border-box}html,body{margin:0;background:transparent;min-height:0}body{color:var(--text);font:13px/1.55 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}[hidden]{display:none!important}button{color:inherit;font:inherit;cursor:pointer}button:focus-visible{outline:2px solid var(--secondary);outline-offset:3px}button:disabled{opacity:.6;cursor:default}
-  .card{border:1px solid var(--line);border-radius:18px;background:var(--card);padding:18px 20px 0;max-width:640px;overflow:hidden}.top{display:flex;align-items:center;justify-content:space-between;gap:12px}.brand{color:var(--secondary);font-size:13px}.status{font-size:11px;color:var(--secondary);white-space:nowrap}body[data-status=blocked] .status{color:var(--fail)}h1{margin:13px 0 17px;font-size:16px;line-height:1.45;font-weight:600;overflow-wrap:anywhere}.context{display:grid;gap:11px}.row{display:flex;align-items:baseline;gap:11px}.label{width:69px;flex:0 0 69px;color:var(--secondary);font-size:12px}.value{min-width:0;overflow-wrap:anywhere}.skills-row{align-items:flex-start}.skills-row>.label{padding-top:1px}.skills{display:grid;gap:8px;flex:1;min-width:0}.skill-row{display:flex;align-items:center;gap:8px;font-size:13px;min-width:0;color:var(--secondary)}.skill-row svg{width:15px;height:15px;flex:none}.skill-row>span:not(.skill-state){min-width:0;overflow-wrap:anywhere}.skill-state{margin-left:auto;font-size:10px;color:var(--muted);white-space:nowrap}.placeholder{color:var(--muted);font-size:12px}.work{border-top:1px solid var(--line);margin-top:17px;padding-top:15px;display:grid;gap:10px}.current{font-weight:500}.change{color:var(--secondary)}.verification{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;min-width:0}.verification-passed{color:var(--pass)}.verification-failed{color:var(--fail)}.verification-pending,.verification-not_run,.verification-skipped,.verification-unavailable{color:var(--muted)}.bottom{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:15px;border-top:1px solid var(--line);padding:12px 0 14px;font-size:11px}.remaining{color:var(--secondary);overflow-wrap:anywhere}.remaining-label{color:var(--muted);margin-right:8px}.details{display:flex;align-items:center;gap:5px;white-space:nowrap;border:0;background:transparent;padding:3px 0;font-size:11px;color:var(--secondary)}.details svg{width:12px;height:12px}.details[aria-expanded=true] svg{transform:rotate(180deg)}.records{border-top:1px solid var(--line);padding:13px 0 16px;font-size:11px;color:var(--secondary)}.records h2{font-size:11px;font-weight:500;color:var(--text);margin:16px 0 8px}.records h2:first-child{margin-top:0}ol{padding:0;list-style:none;margin:0}.records li{display:flex;gap:10px;padding:4px 0;overflow-wrap:anywhere}.records li span{min-width:0}.records li span:first-child{color:var(--muted);flex:none;font-size:10px}.records p{margin:10px 0;font-size:10px;line-height:1.7;color:var(--muted)}.records button{border:1px solid var(--line);border-radius:6px;background:transparent;padding:4px 8px;font-size:10px}.source{border-top:1px solid var(--line);padding-top:10px}.notice{margin:8px 4px;color:var(--secondary);font-size:11px}.stale{font-size:10px;color:var(--secondary);margin:12px 0 0}#empty{margin:8px;color:var(--secondary);font-size:12px}
-  @media(max-width:480px){.card{padding:17px 17px 0}.row{gap:9px}.label{width:65px;flex-basis:65px;font-size:11px}.skill-row,.value{font-size:12px}.skill-state{font-size:9px}.brand{font-size:12px}.records li{gap:7px}}
-</style></head>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>RelayForge · 开发进度</title>
+  <style>html,body{margin:0;background:transparent;min-height:0}{{STYLE}}</style>
+</head>
 <body>
-  <p id="empty" role="status">正在载入本任务的进度…</p>
-  <article class="card" id="task" aria-label="开发进度" hidden>
-    <div class="top"><span class="brand">relayforge-development</span><span class="status" id="status" role="status"></span></div>
-    <h1 id="title"></h1>
-    <div class="context"><div class="row"><span class="label">工作流</span><span class="value" id="workflow"></span></div><div class="row skills-row"><span class="label">已加载 Skill</span><div class="skills" id="skills"></div></div></div>
-    <div class="work"><div class="row"><span class="label">当前</span><span class="value current" id="current"></span></div><div class="row"><span class="label">变更</span><span class="value change" id="change"></span></div><div class="row"><span class="label" title="验证结论由 Agent 根据实际检查结果申报">验证</span><div class="verification" id="verification"></div></div></div>
-    <p class="stale" id="stale" hidden>超过 90 秒未收到阶段更新。</p>
-    <div class="bottom"><span class="remaining"><span class="remaining-label">剩余</span><span id="remaining"></span></span><button class="details" id="details" aria-expanded="false" aria-controls="records">记录<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="m3 4 3 3 3-3"/></svg></button></div>
-    <section class="records" id="records" aria-label="执行记录" hidden>
-      <h2>工作步骤</h2><ol id="steps"></ol>
-      <h2>Skill 加载记录</h2><ol id="loads"></ol><p id="load-empty">尚无加载记录。</p>
-      <h2>阶段更新</h2><ol id="history"></ol>
-      <p id="evidence"></p><p id="updated"></p>
-      <p class="source">Skill 记录来自本插件加载工具的实际读取，不等于执行或成功审计。仅覆盖通过该工具加载的插件内 Skill；步骤、变更与验证结果由 Agent 申报。</p>
-      <button id="refresh" type="button">暂停刷新</button>
-    </section>
-  </article>
-  <p class="notice" id="connection" role="status"></p>
-  <template id="skill-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="4" cy="3" r="1.7"/><circle cx="4" cy="13" r="1.7"/><circle cx="12" cy="3" r="1.7"/><path d="M4 5v6m0-3h4a4 4 0 0 0 4-4"/></svg></template>
+  <div class="rf-progress" id="rf-progress">{{CARD}}</div>
   <script type="module">{{SCRIPT}}</script>
-</body></html>
+</body>
+</html>

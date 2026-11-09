@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {cardView} from '../src/view.mjs';
+import {cardView, historyView} from '../src/view.mjs';
 const base={title:'修复重试',status:'running',summary:'已定位原因',steps:[{label:'修复',status:'active'},{label:'验证',status:'pending'}]};
 const receipt=(name,kind='skill')=>({name,kind,source:'mcp_skill_load',sha256:'a'.repeat(64)});
 
@@ -26,4 +26,34 @@ test('a failed overall check remains visible even when some test counts passed',
   const view=cardView({...base,status:'completed',details:{verification:{status:'failed',passed:20,evidence:'20 个用例通过，但另一项检查失败',source:'agent_declared'}}});
   assert.ok(view.verification.some(item=>item.text==='检查失败'));
   assert.ok(view.verification.some(item=>item.text==='20 项通过'));
+});
+
+test('terminal views ignore stale actions and preserve partial verification',()=>{
+  const snapshot={...base,status:'completed',summary:'修复已完成',steps:[{label:'修复',status:'done'}],details:{current:'正在修复',remaining:'修复后验证',verification:{status:'partial',source:'agent_declared',evidence:'仍有场景未覆盖'}}};
+  const view=cardView(snapshot);
+  assert.equal(view.currentLabel,'结果');
+  assert.equal(view.current,'修复已完成');
+  assert.equal(view.remaining,'无（本次范围）');
+  assert.equal(view.verification[0].text,'部分验证');
+  assert.equal(cardView({...snapshot,status:'cancelled'}).remaining,'已停止（本次尝试）');
+});
+
+test('waiting labels identify who is needed and blocked views use the blocked step',()=>{
+  assert.equal(cardView({...base,status:'waiting'}).status,'等待中');
+  const external=cardView({...base,status:'waiting',details:{waiting_for:'external',reason:'等待构建结果',remaining:'构建结束后验收'}});
+  assert.equal(external.status,'等待外部结果');
+  assert.equal(external.current,'等待构建结果');
+  assert.equal(cardView({...base,status:'waiting',details:{waiting_for:'user'}}).status,'等待你确认');
+  assert.equal(cardView({...base,status:'blocked',steps:[{label:'获取验收环境',status:'blocked'}],details:{current:'旧动作'}}).current,'获取验收环境');
+});
+
+test('history uses recorded details and never invents missing legacy information',()=>{
+  const event={revision:2,status:'running',current_step:'验证',details:{current:'验证重试',change:'已修复重复提交',verification:{status:'partial',source:'agent_declared',evidence:'未覆盖断网'}}};
+  const view=historyView(event);
+  assert.equal(view.title,'已修复重复提交');
+  assert.equal(view.current,'验证重试');
+  assert.equal(view.evidence,'未覆盖断网');
+  assert.equal(historyView({status:'completed',summary:'交付完成'}).title,'交付完成');
+  assert.equal(historyView({status:'running',summary:''}).evidence,'');
+  assert.equal(historyView({status:'blocked',summary:'等待恢复',details:{reason:'缺少验收环境'}}).reason,'缺少验收环境');
 });
