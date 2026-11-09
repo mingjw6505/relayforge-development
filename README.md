@@ -10,6 +10,8 @@ Claude Code, ChatGPT, and compatible agent hosts.
 - `.claude-plugin/plugin.json` — Claude Code manifest.
 - `.agents/plugins/marketplace.json` — repo marketplace manifest for Codex/ChatGPT.
 - `.claude-plugin/marketplace.json` — Claude Code marketplace manifest.
+- `mcp.json` / `.mcp.json` — portable and compatibility registrations for the
+  bundled `relayforge-progress` stdio server.
 - `skills/` — reusable workflows, one directory per skill.
 - `skills/task-router/` — stack-neutral L1/Quick, L2/Standard and L3/Large routing.
 - `skills/development-workflow/` — proportional Standard/Large implementation.
@@ -21,7 +23,31 @@ Claude Code, ChatGPT, and compatible agent hosts.
 - `scripts/workflow_logger.py` — metadata-only Hook event logger.
 - `scripts/analyze_workflow_logs.py` — local timing report generator.
 - `scripts/analyze_workflow_benchmark.py` — baseline/candidate benchmark analyzer.
+- `progress_panel/` — Python MCP server, SQLite task state and bundled inline UI.
+- `progress_panel/web/` — UI source, build tooling and Node tests.
+- `progress_panel/tests/` — progress state, protocol, execution and packaging tests.
+- `tests/` — workflow helpers, telemetry, benchmarks and skill dependency checks.
+- `third-party/` — pinned upstream inventory and retained licenses.
+- `docs/` — workflow specifications, setup, probes and handoff examples.
 - `AGENTS.md` — repository guidance for Codex contributors.
+
+## Skill index
+
+The package contains 18 skill entrypoints. Select capabilities for the actual
+task; the core route does not automatically invoke every bundled skill.
+
+| Area | Skills and purpose |
+| --- | --- |
+| Core workflow | [task-router](skills/task-router/SKILL.md) selects the route; [development-workflow](skills/development-workflow/SKILL.md) implements Standard/Large work; [writing-plans](skills/writing-plans/SKILL.md) persists needed decisions; [finishing-development](skills/finishing-development/SKILL.md) closes work; [delivery-handoff](skills/delivery-handoff/SKILL.md) prepares selected testing transfers. |
+| Frontend | [frontend-design](skills/frontend-design/SKILL.md) guides visual direction; [frontend-patterns](skills/frontend-patterns/SKILL.md) handles nontrivial React/Next.js architecture; [vercel-react-best-practices](skills/vercel-react-best-practices/SKILL.md) provides performance guidance. |
+| Backend and packaging | [java-springboot](skills/java-springboot/SKILL.md), [sql-optimization](skills/sql-optimization/SKILL.md) and [multi-stage-dockerfile](skills/multi-stage-dockerfile/SKILL.md). |
+| Diagnosis and review | [systematic-debugging](skills/systematic-debugging/SKILL.md) handles problems beyond a focused reproduce-and-fix loop; [code-review](skills/code-review/SKILL.md) reviews changes from a fixed Git point with parallel reviewers when compatible with host policy. |
+| Architecture and terminology | [codebase-design](skills/codebase-design/SKILL.md), [domain-modeling](skills/domain-modeling/SKILL.md), [grilling](skills/grilling/SKILL.md) and [improve-codebase-architecture](skills/improve-codebase-architecture/SKILL.md). |
+| Optional execution method | [subagent-driven-development](skills/subagent-driven-development/SKILL.md) provides the explicitly selected upstream per-task agent workflow. |
+
+`skills/requesting-code-review/code-reviewer.md` is a supporting reviewer template,
+not another skill entrypoint. Optional methods require their referenced resources,
+compatible host tools and authorization; see [availability](#optional-workflow-availability).
 
 ## Workflow Routing
 
@@ -130,6 +156,19 @@ tool to produce actual instruction-read receipts, shown separately from declared
 work and verification. Python 3.11+ is required; npm, an API key, Hook trust
 and raw logs are not required at runtime. See [setup and limits](docs/progress-panel.md).
 
+The registered launch command is `python3 -m progress_panel.server`, with the
+working directory resolved from the plugin root. Ensure `python3` resolves to
+Python 3.11+ in the host's PATH; having only `python` or `py` available does not
+satisfy that registration. Hosts without MCP Apps can use the skills and text
+updates. New tools may require a new chat after a plugin update.
+
+The tools create (`start_progress`), update (`update_progress`) and reopen
+(`open_progress`, on request) a task card. `load_progress_skill` reads a selected
+bundled skill and records its content hash; `read_progress` serves the bound card.
+Writes retain the task's `run_id` and returned revision. State is local under the
+plugin data directory or the platform fallback; isolated checks can use
+`RELAYFORGE_PROGRESS_DATA_DIR`. The card is separate from Hook telemetry.
+
 The five core workflows share one task's progress across transitions. Chat carries
 useful findings, blockers and the final result, without a duplicate checklist or
 fixed metadata footer. When the card is unavailable, concise plain-language
@@ -200,17 +239,53 @@ Describe the workflow, inputs, outputs, boundaries, and verification steps.
 Keep skills focused on one recognizable user goal. Add `scripts/`, `references/`,
 or `assets/` inside the skill directory only when the workflow needs them.
 
-## Validate
+## Develop and validate
+
+Use Python 3.11+ for the progress server. The Python runtime uses only the standard
+library. The progress tests and strict type checks use the development-only
+`pytest` and `mypy` tools. UI development needs Node.js and npm; its locked
+dependencies are build tools, not runtime installation requirements.
+
+From the repository root, validate metadata and run the workflow/helper suite:
 
 ```bash
-python3 -m json.tool plugin.json >/dev/null
-python3 -m json.tool .codex-plugin/plugin.json >/dev/null
-python3 -m json.tool .claude-plugin/plugin.json >/dev/null
+python3 -m json.tool plugin.json
+python3 -m json.tool .codex-plugin/plugin.json
+python3 -m json.tool .claude-plugin/plugin.json
+python3 -m json.tool mcp.json
+python3 -m json.tool .mcp.json
 python3 -m unittest discover -s tests -v
 ```
 
-No MCP server, credentials, third-party runtime dependencies, or network calls
-are configured. The optional Codex Hook uses only the Python standard library.
+For progress server, state or registration changes, run:
+
+```bash
+python3 -m pytest progress_panel/tests
+python3 -m mypy --strict progress_panel/state.py progress_panel/server.py progress_panel/skills.py
+```
+
+For UI source or build changes, install the locked development dependencies, build
+the shipped HTML and license notices, and run the UI tests:
+
+```bash
+npm --prefix progress_panel/web ci --ignore-scripts
+npm --prefix progress_panel/web run build
+npm --prefix progress_panel/web test
+```
+
+On Windows, `py -3` or `python` can replace `python3` in development commands after
+checking the interpreter version. This does not change the MCP launch requirement.
+Check Markdown links/fences and run `git diff --check` before handoff. Changes to
+skills should also pass the structure and dependency checks in the root test suite.
+
+Before every commit targeting `main`, increment the root manifest's patch version
+once and synchronize both compatibility manifests, even for a documentation-only
+commit. If preparing a version change, rebuild the UI because its build embeds
+the root plugin version. See [AGENTS.md](AGENTS.md) for contributor gates.
+
+The bundled MCP server and optional Codex Hook use local standard-library Python
+code. Neither needs credentials or makes network calls. npm installation is a
+development step; the built UI and third-party license notices ship in the package.
 
 ## Install from this repository
 

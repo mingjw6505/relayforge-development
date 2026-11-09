@@ -1,5 +1,24 @@
 # RelayForge Development Plugin
 
+## Project map
+
+This repository packages reusable agent skills, a local MCP progress server and
+optional Codex Hook telemetry. It is not a RelayForge application service.
+
+- `skills/`: 18 skill entrypoints plus supporting scripts, references and assets.
+  The core workflows are `task-router`, `development-workflow`, `writing-plans`,
+  `finishing-development` and `delivery-handoff`.
+- `plugin.json`, `.codex-plugin/plugin.json`, `.claude-plugin/plugin.json`:
+  portable, Codex and Claude Code metadata.
+- `mcp.json` and `.mcp.json`: portable and compatibility progress registrations.
+- `progress_panel/`: standard-library Python MCP stdio server and SQLite state.
+- `progress_panel/web/`: UI source, locked build dependencies and Node tests.
+  `progress_panel/static/panel.html` and `THIRD_PARTY_NOTICES.txt` are shipped outputs.
+- `hooks/` and `scripts/`: optional local telemetry and workflow analysis helpers.
+- `tests/`: workflow, helper, telemetry and skill dependency tests;
+  `progress_panel/tests/`: server, state, execution and packaging tests.
+- `third-party/`: pinned upstream resources and licenses; `docs/`: detailed contracts.
+
 ## Repository expectations
 
 - Keep the root `plugin.json` portable and valid against the Agent Plugins schema.
@@ -11,15 +30,77 @@
 - Validate JSON and Markdown structure before handing off changes.
 - Do not add MCP servers, hooks, credentials, or external dependencies unless the feature explicitly requires them.
 
+## Workflow and documentation
+
+- Read the affected skill and its needed references before changing its contract.
+  Keep routing, implementation, planning, finishing and handoff guidance consistent.
+  Route size and risk are separate; small edits do not need a formal plan or agents.
+- Preserve the single-primary-writer default. Optional workflows do not add default
+  phases or authorize delegation, commit, push or deployment beyond host/user policy.
+- Keep README setup, layout and validation commands aligned with actual files.
+  Detailed progress and telemetry behavior belongs in `docs/progress-panel.md` and
+  `docs/workflow-logging.md`; do not turn historical examples into current test evidence.
+- Preserve pinned upstream bytes and licenses. Intentional vendor updates must
+  update `third-party/upstream-dependencies.json` and pass its integrity checks.
+- Keep internal plans and local artifacts in the established ignored locations
+  (`.relayforge/`, `.codex-log/`, `docs/relayforge/`); verify visibility for requested
+  public deliverables. Never include user logs, credentials or machine-specific paths.
+
+## Progress panel and telemetry
+
+- Keep `mcp.json` and `.mcp.json` equivalent apart from portable schema/type fields.
+  Preserve plugin-relative `cwd: "./"`; the registered command needs `python3`
+  resolving to Python 3.11+ in the host environment.
+- Keep server runtime dependencies in the Python standard library. npm packages
+  are for UI development; the shipped UI must work without runtime npm or a CDN.
+- Edit UI source under `progress_panel/web/src/`, then rebuild the shipped HTML
+  and license notices. Rebuild on version changes too: the UI embeds `plugin.json`
+  version. Do not hand-edit generated bundles or omit third-party license notices.
+- Preserve task-scoped UUIDs, revision conflict checks, retry behavior and immutable
+  terminal states. Never introduce a latest-task fallback or synthesize load receipts.
+- A Skill-load receipt proves instruction reading, not execution or success.
+  Agent-declared progress, actual verification and Hook events remain distinct.
+  Missing MCP tools/UI must allow a concise text fallback.
+- Keep state and telemetry local and bounded. Use temporary directories or
+  `RELAYFORGE_PROGRESS_DATA_DIR` / `RELAYFORGE_WORKFLOW_LOG_DIR` for isolated checks;
+  do not inspect real user logs to populate cards or tests.
+
 ## Verification
 
-Run the following checks after changing plugin metadata or skills:
+Choose checks for the changed surface and reuse valid evidence. For documentation
+edits, check local links, Markdown fences, command accuracy and `git diff --check`.
+Do not install tools or rebuild the UI solely for prose changes.
+
+Run the following checks after changing plugin metadata or skills (commands assume
+the repository root and Python 3.11+; Windows may use `py -3` or `python`):
 
 ```bash
 python3 -m json.tool plugin.json >/dev/null
 python3 -m json.tool .codex-plugin/plugin.json >/dev/null
 python3 -m json.tool .claude-plugin/plugin.json >/dev/null
+python3 -m unittest discover -s tests -v
 ```
+
+For registration changes, also validate `mcp.json` and `.mcp.json` with
+`python3 -m json.tool`. For server, state or registration changes, run:
+
+```bash
+python3 -m pytest progress_panel/tests
+python3 -m mypy --strict progress_panel/state.py progress_panel/server.py progress_panel/skills.py
+```
+
+For UI source, build tooling or embedded version changes, run:
+
+```bash
+npm --prefix progress_panel/web ci --ignore-scripts
+npm --prefix progress_panel/web run build
+npm --prefix progress_panel/web test
+```
+
+`pytest` and `mypy` are development tools. Missing tools or host-level integration
+checks must be reported as gaps, not passing evidence. Python/Node checks do not
+prove inline rendering works on every host; use the documented host probes when
+changing that integration.
 
 Before a `main` commit, also verify that all plugin manifest versions match:
 
