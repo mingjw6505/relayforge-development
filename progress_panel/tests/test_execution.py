@@ -72,7 +72,7 @@ def test_invalid_or_foreign_skills_cannot_claim_use(tmp_path: Path):
     )["isError"]
 
 
-def test_skill_file_boundary_rejects_symlinks_empty_and_oversized_instructions(
+def test_skill_file_boundary_rejects_empty_invalid_and_oversized_instructions(
     tmp_path: Path,
 ):
     catalog = tmp_path / "skills"
@@ -83,10 +83,21 @@ def test_skill_file_boundary_rejects_symlinks_empty_and_oversized_instructions(
         file.write_bytes(payload)
         with pytest.raises(ProgressError):
             load_bundled_skill(catalog, "test-skill")
-    file.unlink()
+
+
+def test_skill_file_boundary_rejects_symlinks(tmp_path: Path):
+    catalog = tmp_path / "skills"
+    folder = catalog / "test-skill"
+    folder.mkdir(parents=True)
+    file = folder / "SKILL.md"
     outside = tmp_path / "outside.md"
     outside.write_text("external")
-    file.symlink_to(outside)
+    try:
+        file.symlink_to(outside)
+    except OSError as error:
+        if getattr(error, "winerror", None) == 1314:
+            pytest.skip("Windows user lacks symlink creation privilege")
+        raise
     with pytest.raises(ProgressError):
         load_bundled_skill(catalog, "test-skill")
 
