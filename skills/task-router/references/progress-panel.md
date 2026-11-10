@@ -38,11 +38,50 @@ Both this tool and `update_progress` write revisions: retain the revision from
 every successful write. Re-entering a different core workflow may require a load
 to select it again; repeated identical loads are safe and do not duplicate rows.
 
-This loader covers bundled skills only. External or host-loaded skills without
-a receipt remain unrecorded; do not infer they were not used. Do not fabricate a
-load record from a plan, file name, elapsed time or absent host lifecycle event.
-If the loader is missing, use normal skill delivery and continue; never install
-or reconfigure the host just to populate the card.
+The loader covers bundled Skills only. Use the optional top-level `skill_uses`
+array on `start_progress` / `update_progress` to report every actually used Skill
+that was read through another route, including external plugin Skills, directly
+read files and instructions supplied by the host. This is an Agent use declaration,
+not a synthetic load receipt. Reading a catalog description or merely considering
+a Skill is not use. Report only after selecting and reading/applying its instructions.
+
+Each item has exactly `skill` and `via`. Use the real `namespace:skill-name`:
+`relayforge-development:frontend-design` for this plugin, the actual external
+plugin name for its Skills, `project:name` for project Skills, and `host:name`
+for personal/system Skills. Bare names normalize to `host:name`; preserve the
+catalog's name and never use an absolute path as an ID. `via` is `direct_read`
+for a file read, `skill_tool` for a Skill tool invocation, or `context` for host
+instructions actually applied. Do not add a source, digest, timestamp or body.
+
+```json
+{
+  "skill_uses": [
+    {"skill": "host:imagegen", "via": "direct_read"},
+    {"skill": "relayforge-product:brainstorming", "via": "skill_tool"}
+  ]
+}
+```
+
+Send new uses with the next real progress milestone (including before a terminal
+update). If a Skill was already used for this same task before the card started,
+include it on start; do not reconstruct uses from other tasks, transcripts or logs.
+The array is additive, at most 32 entries per call and 64 distinct Skill/channel
+pairs per task. Omission or `[]` preserves prior records. Repeated pairs do not
+duplicate entries; different providers and channels remain distinct. Keep the
+returned revision and reconcile scoped conflicts just as with other progress writes.
+Exceeding the bound fails explicitly; do not claim an incomplete list is exhaustive.
+
+The panel merges real bundled load receipts and use declarations by qualified
+Skill name, while retaining each source in details. Only a bundled loader receipt
+selects the current workflow. A use declaration never fabricates a file read,
+digest, successful execution or host observation. Its time is server reception,
+not an inferred invocation time. Hosts do not supply a universal Skill audit;
+unreported uses cannot be detected automatically by this server.
+
+If older tools lack `skill_uses`, omit the unsupported field, state the missing
+coverage briefly in text and continue. If the loader is missing, use normal skill
+delivery and the supported declaration channel. Never install or reconfigure the
+host, retry unsupported arguments, or scan user logs just to populate the card.
 
 ## Meaningful updates
 

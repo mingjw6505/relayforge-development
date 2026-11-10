@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, BinaryIO
 
 from progress_panel.skills import load_bundled_skill
-from progress_panel.state import ProgressError, ProgressStore
+from progress_panel.state import SKILL_ID_PATTERN, SKILL_USE_VIAS, ProgressError, ProgressStore
 
 RESOURCE_URI = "ui://relayforge-development/progress-v2.html"
 MAX_REQUEST_BYTES = 16 * 1024
@@ -35,6 +35,20 @@ STEP_SCHEMA: dict[str, Any] = {
 }
 ID_SCHEMA = {"type": "string", "format": "uuid"}
 MODE_SCHEMA = {"type": "string", "enum": ["L1", "L2", "L3"]}
+SKILL_USES_SCHEMA = {
+    "type": "array", "maxItems": 32,
+    "description": "Add only Skills actually read and used for this task, including external and direct reads. These are Agent declarations, not tool-load receipts. Omission preserves prior records.",
+    "items": {
+        "type": "object", "additionalProperties": False,
+        "required": ["skill", "via"],
+        "properties": {
+            "skill": {"type": "string", "pattern": SKILL_ID_PATTERN,
+                      "description": "namespace:skill-name from the real catalog (host:name for personal/system Skills; project:name for project Skills; plugin-name:name for plugin Skills). Bare names mean host:name."},
+            "via": {"type": "string", "enum": sorted(SKILL_USE_VIAS),
+                    "description": "direct_read: read instruction file; skill_tool: selected via a Skill tool; context: instructions supplied by host and actually applied. Never metadata discovery or planned use."},
+        },
+    },
+}
 METHOD_PROGRESS_SCHEMA = {
     "type": "array", "maxItems": 3,
     "items": {
@@ -118,6 +132,7 @@ def tools() -> list[dict[str, Any]]:
                     "details": DETAILS_SCHEMA,
                     "execution_mode": MODE_SCHEMA,
                     "method_progress": METHOD_PROGRESS_SCHEMA,
+                    "skill_uses": SKILL_USES_SCHEMA,
                 },
                 ["title", "steps"],
             ),
@@ -148,6 +163,7 @@ def tools() -> list[dict[str, Any]]:
                     "details": DETAILS_SCHEMA,
                     "execution_mode": MODE_SCHEMA,
                     "method_progress": METHOD_PROGRESS_SCHEMA,
+                    "skill_uses": SKILL_USES_SCHEMA,
                 },
                 ["run_id", "expected_revision", "status", "steps"],
             ),
@@ -262,6 +278,8 @@ class ProgressServer:
                 raise ProgressError("invalid_execution_mode")
             if "method_progress" in arguments and arguments["method_progress"] is None:
                 raise ProgressError("invalid_method_progress")
+            if "skill_uses" in arguments and arguments["skill_uses"] is None:
+                raise ProgressError("invalid_skill_uses")
             if name == "start_progress":
                 state = self.store.start(
                     arguments["title"],
@@ -270,6 +288,7 @@ class ProgressServer:
                     arguments.get("details"),
                     execution_mode=arguments.get("execution_mode"),
                     declared_methods=arguments.get("method_progress"),
+                    used_skills=arguments.get("skill_uses"),
                 )
             elif name == "update_progress":
                 state = self.store.update(
@@ -281,6 +300,7 @@ class ProgressServer:
                     arguments.get("details"),
                     execution_mode=arguments.get("execution_mode"),
                     declared_methods=arguments.get("method_progress"),
+                    used_skills=arguments.get("skill_uses"),
                 )
             elif name == "load_progress_skill":
                 current = self.store.read(arguments["run_id"])
@@ -352,8 +372,12 @@ class ProgressServer:
                     "For software development tasks using RelayForge, call start_progress once "
                     "before substantive work, then update_progress at meaningful milestones and "
                     "the actual final outcome. Use load_progress_skill only for selected bundled "
-                    "skills to deliver their instructions and record actual loads. Retain the run_id "
-                    "and revision returned by either write tool. Prefer concise current/change/remaining "
+                    "skills to deliver their instructions and record actual loads. Report every other "
+                    "actually used Skill in skill_uses on start_progress/update_progress "
+                    "after reading/applying it, including external, direct-read and host-provided instructions. "
+                    "Use namespace:skill-name with direct_read/skill_tool/context; never report planned or "
+                    "merely discovered Skills. Declarations are not load receipts or execution audits. Retain "
+                    "the run_id and revision returned by every write tool. Prefer concise current/change/remaining "
                     "details and evidence-supported verification; never infer a test pass from task completion. "
                     "Once routing is selected declare execution_mode L1/L2/L3. Keep SDD/TDD/coordination "
                     "method_progress phases explicit and details.current concrete; skill loads never "

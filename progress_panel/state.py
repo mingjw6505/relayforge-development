@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import uuid
 from collections.abc import Iterator
@@ -30,6 +31,9 @@ VERIFICATION_STATUSES = {
 }
 EXECUTION_MODES = {"L1", "L2", "L3"}
 METHODS = {"sdd", "tdd", "coordination"}
+SKILL_ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}(?::[A-Za-z0-9][A-Za-z0-9_-]{0,63})?$"
+SKILL_USE_VIAS = {"direct_read", "skill_tool", "context"}
+MAX_SKILL_USES = 64
 
 
 @dataclass
@@ -66,6 +70,42 @@ def run_id(value: object) -> str:
     if str(parsed) != value:
         raise ProgressError("invalid_run_id")
     return value
+
+
+def validate_skill_uses(value: object) -> list[dict[str, str]]:
+    """Accept use declarations, never caller-supplied receipts or filesystem paths."""
+    if value is None:
+        return []
+    if not isinstance(value, list) or len(value) > 32:
+        raise ProgressError("invalid_skill_uses")
+    result: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in value:
+        if not isinstance(item, dict) or set(item) != {"skill", "via"}:
+            raise ProgressError("invalid_skill_uses")
+        skill, via = item["skill"], item["via"]
+        if (not isinstance(skill, str) or not re.fullmatch(SKILL_ID_PATTERN, skill)
+                or not isinstance(via, str) or via not in SKILL_USE_VIAS):
+            raise ProgressError("invalid_skill_uses")
+        qualified = skill if ":" in skill else f"host:{skill}"
+        key = (qualified, via)
+        if key in seen:
+            raise ProgressError("invalid_skill_uses")
+        seen.add(key)
+        result.append({"skill": qualified, "via": via})
+    return result
+
+
+def merge_skill_uses(
+    existing: list[Snapshot], declarations: list[dict[str, str]], at: str,
+) -> tuple[list[Snapshot], list[Snapshot]]:
+    """Append each actual-use declaration once while retaining its first receipt time."""
+    known = {(item["skill"], item["via"]) for item in existing}
+    added = [dict(item, source="agent_declared", recorded_at=at) for item in declarations
+             if (item["skill"], item["via"]) not in known]
+    if len(existing) + len(added) > MAX_SKILL_USES:
+        raise ProgressError("skill_use_limit")
+    return [*existing, *added], added
 
 
 def steps(value: object, status: str) -> list[dict[str, str]]:
@@ -228,7 +268,7 @@ def stage_details(value: Snapshot, status: str) -> Snapshot:
 def stage_event(
     revision: int, at: str, status: str, summary: str,
     execution: Snapshot, declared_steps: list[dict[str, str]],
-    mode: str | None, methods: list[Snapshot],
+    mode: str | None, methods: list[Snapshot], uses: list[Snapshot] | None = None,
 ) -> Snapshot:
     """Store the bounded declarations needed to read a past milestone."""
     event: Snapshot = {
@@ -242,6 +282,8 @@ def stage_event(
     )
     if current:
         event["current_step"] = current
+    if uses:
+        event["skill_uses"] = uses
     return event
 
 
@@ -310,6 +352,7 @@ class ProgressStore:
         summary: object = "",
         execution: object = None,
         *, execution_mode: object = None, declared_methods: object = None,
+        used_skills: object = None,
     ) -> Snapshot:
         """Start a new task; the returned random run ID scopes all later operations."""
         title = text(title, 80)
@@ -318,7 +361,9 @@ class ProgressStore:
         execution = stage_details(details(execution) if execution is not None else {}, "running")
         mode = validate_execution_mode(execution_mode)
         methods = method_progress(declared_methods)
+        declared_uses = validate_skill_uses(used_skills)
         now = timestamp()
+        uses, added = merge_skill_uses([], declared_uses, now)
         identifier = str(uuid.uuid4())
         snapshot: Snapshot = {
             "schema_version": 1,
@@ -334,10 +379,11 @@ class ProgressStore:
             "execution_mode": mode,
             "method_progress": methods,
             "skill_loads": [],
+            "skill_uses": uses,
             "created_at": now,
             "updated_at": now,
             "history": [
-                stage_event(1, now, "running", summary, execution, declared_steps, mode, methods)
+                stage_event(1, now, "running", summary, execution, declared_steps, mode, methods, added)
             ],
         }
         with self.connection() as connection:
@@ -364,6 +410,7 @@ class ProgressStore:
         summary: object = "",
         execution: object = None,
         *, execution_mode: object = None, declared_methods: object = None,
+        used_skills: object = None,
     ) -> Snapshot:
         """Apply a declaration atomically; identical lost-response retries are safe."""
         identifier = run_id(identifier)
@@ -373,6 +420,7 @@ class ProgressStore:
             raise ProgressError("invalid_status")
         declared_steps = steps(declared_steps, status)
         summary = text(summary, 240, empty=True)
+        declared_uses = validate_skill_uses(used_skills)
         with self.connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
             current = self._read(connection, identifier)
@@ -386,6 +434,7 @@ class ProgressStore:
                     else current.get("execution_mode"))
             methods = (method_progress(declared_methods) if declared_methods is not None
                        else current.get("method_progress", []))
+            known_uses = {(item["skill"], item["via"]) for item in current.get("skill_uses", [])}
             if current["revision"] != expected_revision:
                 identical_retry = (
                     current["revision"] == expected_revision + 1
@@ -395,6 +444,7 @@ class ProgressStore:
                     and current.get("details", {}) == execution
                     and current.get("execution_mode") == mode
                     and current.get("method_progress", []) == methods
+                    and all((item["skill"], item["via"]) in known_uses for item in declared_uses)
                 )
                 if identical_retry:
                     return current
@@ -406,9 +456,10 @@ class ProgressStore:
                 raise ProgressError("invalid_mode_transition")
             validate_method_end(methods, status)
             now = timestamp()
+            uses, added = merge_skill_uses(current.get("skill_uses", []), declared_uses, now)
             revision = expected_revision + 1
             history = current["history"] + [
-                stage_event(revision, now, status, summary, execution, declared_steps, mode, methods)
+                stage_event(revision, now, status, summary, execution, declared_steps, mode, methods, added)
             ]
             updated = dict(
                 current,
@@ -419,6 +470,7 @@ class ProgressStore:
                 details=execution,
                 execution_mode=mode,
                 method_progress=methods,
+                skill_uses=uses,
                 updated_at=now,
                 history=history[-MAX_HISTORY:],
             )

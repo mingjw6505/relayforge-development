@@ -4,6 +4,14 @@ import {cardView, historyView} from '../src/view.mjs';
 const base={title:'修复重试',status:'running',summary:'已定位原因',steps:[{label:'修复',status:'active'},{label:'验证',status:'pending'}]};
 const receipt=(name,kind='skill')=>({name,kind,source:'mcp_skill_load',sha256:'a'.repeat(64)});
 
+test('loaded workflow Skills remain visible when no specialist Skill was loaded',()=>{
+  const view=cardView({...base,workflow:'finishing-development',skill_loads:[
+    receipt('task-router','workflow'),receipt('development-workflow','workflow'),receipt('finishing-development','workflow'),
+  ]});
+  assert.equal(view.workflow,'finishing-development');
+  assert.deepEqual(view.skills.map(item=>item.name),['task-router','development-workflow','finishing-development']);
+});
+
 test('old snapshots and missing evidence do not invent workflow or Skill use',()=>{
   const view=cardView({...base,workflow:'development-workflow',skill_loads:[{name:'planned',kind:'skill',source:'planned'}]});
   assert.equal(view.workflow,'未记录');assert.deepEqual(view.skills,[]);
@@ -12,8 +20,18 @@ test('old snapshots and missing evidence do not invent workflow or Skill use',()
 });
 test('receipt-backed names and separately declared verification reach the compact view',()=>{
   const view=cardView({...base,workflow:'development-workflow',skill_loads:[receipt('development-workflow','workflow'),receipt('systematic-debugging')],details:{current:'验证重试',change:'补齐幂等校验',remaining:'超时恢复',verification:{status:'partial',passed:18,pending:2,evidence:'相关回归结果',source:'agent_declared'}}});
-  assert.equal(view.workflow,'development-workflow');assert.equal(view.skills[0].name,'systematic-debugging');
+  assert.equal(view.workflow,'development-workflow');
+  assert.deepEqual(view.skills.map(item=>item.name),['development-workflow','systematic-debugging']);
   assert.equal(view.current,'验证重试');assert.deepEqual(view.verification.map(item=>item.text),['部分验证','18 项通过','2 项待验']);
+});
+
+test('only task-scoped load receipts reach the Skill list',()=>{
+  const view=cardView({...base,skill_loads:[receipt('task-router','workflow'),
+    {...receipt('planned'),source:'planned'}, {...receipt('bad-hash'),sha256:''},
+    receipt('unknown-kind','other'),receipt('systematic-debugging')],
+  });
+  assert.deepEqual(view.skills.map(item=>item.name),['task-router','systematic-debugging']);
+  assert.equal(cardView({...base,skill_loads:[]}).skills.length,0);
 });
 test('completed work cannot imply passed verification or replace partial results',()=>{
   const done={...base,status:'completed',steps:[{label:'修复',status:'done'}]};
@@ -94,4 +112,30 @@ test('unknown declarations stay unknown and method completion does not imply tes
   assert.equal(view.methods[0].skipped,1);
   assert.equal(view.verification[0].text,'未执行');
   assert.deepEqual(cardView({...base,method_progress:[{method:'sdd',source:'planned',phases:[]}]}).methods,[]);
+});
+
+const use=(skill,via='direct_read')=>({skill,via,source:'agent_declared',recorded_at:'2026-11-10T10:00:00Z'});
+test('external/direct-read/host declarations appear beside verified bundled loads',()=>{
+  const view=cardView({...base,skill_loads:[receipt('task-router','workflow')],skill_uses:[use('host:imagegen'),use('other-plugin:design','skill_tool'),use('host:openai-docs','context')]});
+  assert.deepEqual(view.skills.map(item=>item.name),['task-router','imagegen','design','openai-docs']);
+  assert.equal(view.workflow,'未记录');
+  assert.equal(view.skills[0].records[0].source,'mcp_skill_load');
+  assert.equal(view.skills[1].records[0].source,'agent_declared');
+  assert.match(view.skills[1].records[0].label,/直接读取.*Agent/);
+  assert.equal(view.skills[1].records[0].digest,undefined);
+});
+test('the same qualified Skill merges evidence while equal names from different providers stay distinct',()=>{
+  const view=cardView({...base,skill_loads:[receipt('frontend-design')],skill_uses:[use('relayforge-development:frontend-design'),use('host:frontend-design'),use('host:frontend-design','skill_tool')]});
+  assert.deepEqual(view.skills.map(item=>item.name),['relayforge-development:frontend-design','host:frontend-design']);
+  assert.equal(view.skills[0].records.length,2);
+  assert.equal(view.skills[1].records.length,2);
+});
+test('unverified provenance and planned metadata never enter usage records',()=>{
+  const view=cardView({...base,skill_uses:[{...use('host:planned'),source:'planned'}, {...use('host:forged'),source:'mcp_skill_load'},use('host:later','planned'),use('/private/secret'),{skill:'host:missing-evidence',via:'direct_read',source:'agent_declared'}]});
+  assert.deepEqual(view.skills,[]);
+});
+test('history shows only use declarations recorded at that milestone',()=>{
+  const view=historyView({status:'running',skill_uses:[use('host:imagegen')]});
+  assert.match(view.skillUses.join(' '),/host:imagegen.*直接读取/);
+  assert.deepEqual(historyView({status:'running'}).skillUses,[]);
 });

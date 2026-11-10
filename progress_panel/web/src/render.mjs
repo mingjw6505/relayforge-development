@@ -45,6 +45,7 @@ export function createPanel(root, {onPauseToggle = () => {}} = {}) {
       const body = node('div', '', 'rf-history-body');
       const lines = [
         ['当时模式', view.mode],
+        ['本次使用申报', view.skillUses.join('；')],
         ['方法进度', view.methods.map(method => `${method.title}：${method.current}`).join('；')],
         ['当时动作', view.current], ['当时变更', view.change], ['当时剩余', view.remaining],
         ['等待／受阻原因', view.reason],
@@ -129,6 +130,7 @@ export function createPanel(root, {onPauseToggle = () => {}} = {}) {
     el('mode').textContent = view.mode;
     el('mode').title = view.modeDescription;
     el('skills').textContent = view.skills.length ? view.skills.map(skill => skill.name).join(' · ') : '未记录';
+    el('skills').title = view.skills.map(skill => `${skill.id}：${skill.records.map(record => record.label).join('；')}`).join('\n');
     renderMethods(view.methods);
     el('current-label').textContent = view.currentLabel;
     el('attention').textContent = view.attention;
@@ -155,12 +157,17 @@ export function createPanel(root, {onPauseToggle = () => {}} = {}) {
       steps.scrollLeft += current.getBoundingClientRect().left - steps.getBoundingClientRect().left
         - (steps.clientWidth - current.clientWidth) / 2;
     }
-    el('load-section').hidden = view.receipts.length === 0;
-    el('load-heading').textContent = `工作流与 Skill 加载记录 · ${view.receipts.length} 项`;
-    el('loads').replaceChildren(...view.receipts.map(receipt => {
+    el('load-section').hidden = view.skills.length === 0;
+    el('load-heading').textContent = `Skill 记录与来源 · ${view.skills.length} 项`;
+    el('loads').replaceChildren(...view.skills.map(skill => {
       const item = document.createElement('li');
-      item.append(node('time', time(receipt.loaded_at)), node('span', receipt.name, 'rf-load-name'),
-        node('span', `已读取 · ${receipt.sha256.slice(0, 8)}`));
+      item.append(node('span', skill.id, 'rf-load-name'));
+      for (const record of skill.records) {
+        const evidence = node('div', '', 'rf-load-evidence');
+        evidence.append(node('time', time(record.at)),
+          node('span', `${record.label}${record.digest ? ` · ${record.digest.slice(0, 8)}` : ''}`));
+        item.append(evidence);
+      }
       return item;
     }));
     el('updated').textContent = `阶段申报 ${time(snapshot.updated_at)}`;

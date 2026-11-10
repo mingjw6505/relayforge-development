@@ -9,6 +9,37 @@ const modeNames = {L1: 'Quick / L1', L2: 'Standard / L2', L3: 'Large / L3'};
 const modeDescriptions = {L1: '快速开发', L2: '标准开发', L3: '大型任务'};
 const methodNames = {sdd: 'SDD · 规格驱动', tdd: 'TDD · 测试驱动', coordination: '协作与依赖协调'};
 const phaseNames = {pending: '待处理', active: '进行中', done: '已完成', blocked: '受阻', skipped: '已跳过'};
+const useViaNames = {direct_read: '直接读取', skill_tool: 'Skill 工具', context: '宿主提供说明'};
+const qualifiedSkill = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}:[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+
+function declaredUses(value) {
+  return (Array.isArray(value) ? value : []).filter(item => item?.source === 'agent_declared'
+    && typeof item.skill === 'string' && qualifiedSkill.test(item.skill)
+    && Object.hasOwn(useViaNames, item.via) && typeof item.recorded_at === 'string'
+    && Number.isFinite(Date.parse(item.recorded_at)));
+}
+
+/** Names merge by namespace; each evidence source keeps its own meaning. */
+function skillRecords(receipts, uses) {
+  const entries = new Map();
+  function add(id, record) {
+    if (!entries.has(id)) entries.set(id, {id, shortName: id.split(':')[1], records: []});
+    const entry = entries.get(id);
+    if (!entry.records.some(value => value.source === record.source && value.via === record.via)) {
+      entry.records.push(record);
+    }
+  }
+  for (const receipt of receipts) add(`relayforge-development:${receipt.name}`, {
+    source: 'mcp_skill_load', label: '工具读取', at: receipt.loaded_at, digest: receipt.sha256,
+  });
+  for (const use of uses) add(use.skill, {
+    source: 'agent_declared', via: use.via, label: `${useViaNames[use.via]} · Agent 申报`, at: use.recorded_at,
+  });
+  const values = [...entries.values()];
+  const counts = new Map();
+  for (const item of values) counts.set(item.shortName, (counts.get(item.shortName) ?? 0) + 1);
+  return values.map(item => ({...item, name: counts.get(item.shortName) > 1 ? item.id : item.shortName}));
+}
 
 /** Selected mode and method phases come from declarations, never skill receipts. */
 function executionView(snapshot) {
@@ -56,7 +87,8 @@ function verificationView(value) {
 /** Present a milestone using only declarations actually stored at that revision. */
 export function historyView(event) {
   const execution = executionView(event);
-  const context = {mode: execution.mode === '未申报' ? '' : execution.mode, methods: execution.methods};
+  const context = {mode: execution.mode === '未申报' ? '' : execution.mode, methods: execution.methods,
+    skillUses: declaredUses(event.skill_uses).map(item => `${item.skill}（${useViaNames[item.via]} · Agent 申报）`)};
   if (event.kind === 'skill_loaded') {
     return {...context, title: `已加载 ${event.skill}`, current: '', change: '', remaining: '', reason: '', verification: [], evidence: ''};
   }
@@ -77,8 +109,10 @@ export function historyView(event) {
 /** Resolve display state for both current and legacy snapshots. */
 export function cardView(snapshot) {
   const info = snapshot.details ?? {};
-  const receipts = (snapshot.skill_loads ?? []).filter(item => item.source === 'mcp_skill_load'
-    && typeof item.name === 'string' && /^[a-f0-9]{64}$/.test(item.sha256));
+  const receipts = (snapshot.skill_loads ?? []).filter(item => item?.source === 'mcp_skill_load'
+    && ['workflow', 'skill'].includes(item.kind)
+    && typeof item.name === 'string' && /^[a-z0-9][a-z0-9-]{0,63}$/.test(item.name)
+    && /^[a-f0-9]{64}$/.test(item.sha256));
   const workflow = receipts.some(item => item.kind === 'workflow' && item.name === snapshot.workflow)
     ? snapshot.workflow : '未记录';
   const verification = verificationView(info.verification);
@@ -119,7 +153,7 @@ export function cardView(snapshot) {
     title: snapshot.title, status, currentLabel, current,
     attention,
     change: change === current ? '' : change,
-    remaining, workflow, receipts, skills: receipts.filter(item => item.kind === 'skill'),
+    remaining, workflow, receipts, skills: skillRecords(receipts, declaredUses(snapshot.skill_uses)),
     verification: verification.items,
     evidence: verification.evidence || (verificationState === 'not_run' ? '尚未申报验证结果。' : '未提供验证依据'),
   };

@@ -190,8 +190,11 @@ Risk is low/medium/high; legacy normal is read as medium.
 Codex desktop can display a compact inline card at the start of development work.
 The bundled local MCP server displays current work, changes, verification and blockers;
 the card refreshes itself. Selected bundled Skills can be loaded through the MCP
-tool to produce actual instruction-read receipts, shown separately from declared
-work and verification. Python 3.11+ is required; npm, an API key, Hook trust
+tool to produce actual instruction-read receipts. External Skills, direct file reads
+and host-provided instructions actually used for the task are synchronized through
+`skill_uses` on progress start/update. The compact list merges names; details distinguish
+tool reads from Agent use declarations. Unreported use cannot be captured automatically.
+These records remain separate from declared work and verification. Python 3.11+ is required; npm, an API key, Hook trust
 and raw logs are not required at runtime. See [setup and limits](docs/progress-panel.md).
 
 The registered launch command is `python3 -m progress_panel.server`, with the
@@ -203,6 +206,9 @@ updates. New tools may require a new chat after a plugin update.
 The tools create (`start_progress`), update (`update_progress`) and reopen
 (`open_progress`, on request) a task card. `load_progress_skill` reads a selected
 bundled skill and records its content hash; `read_progress` serves the bound card.
+Usage declarations carry only a qualified Skill name and read channel, never file
+paths or contents. They are additive and task-scoped; they do not select a workflow
+or manufacture a load receipt. See the [record contract](skills/task-router/references/progress-panel.md).
 Writes retain the task's `run_id` and returned revision. State is local under the
 plugin data directory or the platform fallback; isolated checks can use
 `RELAYFORGE_PROGRESS_DATA_DIR`. The card is separate from Hook telemetry.

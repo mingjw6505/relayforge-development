@@ -52,6 +52,14 @@ const scenarios = {
     ],
   }},
   running: {label: 'Standard / L2 · 生成规格', snapshot: base},
+  skill_sources: {label: 'Skill · 外部与直接读取', snapshot: {...base,
+    title: '核对 Skill 记录来源（模拟）',
+    skill_uses: [
+      {skill: 'host:imagegen', via: 'direct_read', source: 'agent_declared', recorded_at: at(5)},
+      {skill: 'relayforge-product:brainstorming', via: 'skill_tool', source: 'agent_declared', recorded_at: at(5)},
+      {skill: 'host:openai-docs', via: 'context', source: 'agent_declared', recorded_at: at(5)},
+    ],
+  }},
   quick: {label: 'Quick / L1 · 定位修复', snapshot: {...base, execution_mode: 'L1', method_progress: [], workflow: 'task-router', skill_loads: [], steps: [{label: '定位原因', status: 'active'}, {label: '修复与检查', status: 'pending'}], details: {current: '正在定位重试次数不正确的原因', remaining: '修复并运行针对性检查', verification}}},
   tdd: {label: 'Standard / L2 · SDD + TDD', snapshot: {...base, method_progress: [sdd(3), {method: 'tdd', status: 'running', source: 'agent_declared', phases: [{label: '编写失败用例', status: 'done'}, {label: '最小实现', status: 'active'}, {label: '重构', status: 'pending'}]}], details: {current: '正在实现让失败重试用例通过的最小改动', change: '规格与计划已确认，回归用例已观察到预期失败', remaining: '用例通过后整理重试逻辑', verification: {status: 'running', evidence: '模拟数据：当前 TDD 循环处于最小实现', source: 'agent_declared'}}}},
   large: {label: 'Large / L3 · 协作推进', snapshot: {...base, execution_mode: 'L3', method_progress: [sdd(3), {method: 'coordination', status: 'running', source: 'agent_declared', phases: [{label: '接口约定', status: 'done'}, {label: '后端交付', status: 'active'}, {label: '前端接入', status: 'pending'}, {label: '集成验证', status: 'pending'}]}], details: {current: '正在推进后端任务，并核对前端依赖的接口契约', change: '跨模块接口和交付依赖已明确', remaining: '后端交付后接入前端并做集成验证', verification}}},
@@ -78,6 +86,7 @@ export const previewScenarios = Object.fromEntries(Object.entries(scenarios).map
   const snapshot = {...scenario.snapshot, steps: selectedSteps, revision: 8, updated_at: at(7)};
   const event = {revision: 8, at: at(7), status: snapshot.status, summary: snapshot.summary,
     execution_mode: snapshot.execution_mode, method_progress: snapshot.method_progress, details: snapshot.details,
+    ...(name === 'skill_sources' ? {skill_uses: snapshot.skill_uses} : {}),
     current_step: selectedSteps.find(step => ['active', 'blocked'].includes(step.status))?.label};
   snapshot.history = [...snapshot.history, event];
   return [name, {...scenario, snapshot}];

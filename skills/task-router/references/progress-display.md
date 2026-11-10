@@ -17,9 +17,15 @@ permission change or retry loop. Honor requests to reduce updates. Normal host
 communication requirements still apply; a panel does not replace necessary
 questions, explanations or the final result.
 
-Workflow and Skill names come from actual instruction-load receipts when the
-loading tool is used; never record planned skills as loaded. Other progress fields
-are Agent declarations, not host-verified activity. Preserve valid
+Workflow names and tool-load evidence come from actual instruction-load receipts.
+For every other Skill actually read and applied to this task (including external,
+direct-file reads and host-provided instructions), include its qualified name and
+read channel in `skill_uses` on the next start/update milestone. Flush any pending
+use declarations before ending the task. Never report metadata discovery, planned
+use or a Skill merely mentioned in chat. Use declarations stay Agent-declared,
+separate from tool-load receipts and host audit evidence. Follow the linked
+progress contract for namespacing, incremental updates and older-tool fallback.
+Other progress fields are also Agent declarations. Preserve valid
 evidence across resumes, identify invalidated checks, distinguish failed/skipped
 work from completed work, and never invent completion, percentages or Skill loads.
 Closing a card is not a request to keep creating replacements; show it again only when asked.
