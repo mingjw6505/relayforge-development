@@ -194,14 +194,26 @@ tool to produce actual instruction-read receipts. External Skills, direct file r
 and host-provided instructions actually used for the task are synchronized through
 `skill_uses` on progress start/update. The compact list merges names; details distinguish
 tool reads from Agent use declarations. Unreported use cannot be captured automatically.
-These records remain separate from declared work and verification. Python 3.11+ is required; npm, an API key, Hook trust
-and raw logs are not required at runtime. See [setup and limits](docs/progress-panel.md).
+These records remain separate from declared work and verification. The bootstrap
+requires Node.js 18+ and selects an existing Python 3.11+ with sqlite3. It uses Node
+built-ins, not runtime npm packages; an API key, Hook trust and raw logs are not
+required. See [setup and limits](docs/progress-panel.md).
 
-The registered launch command is `python3 -m progress_panel.server`, with the
-working directory resolved from the plugin root. Ensure `python3` resolves to
-Python 3.11+ in the host's PATH; having only `python` or `py` available does not
-satisfy that registration. Hosts without MCP Apps can use the skills and text
-updates. New tools may require a new chat after a plugin update.
+The registered command is `node ./scripts/progress-launcher.cjs`, with the
+working directory resolved from the plugin root. Node must be available to the
+host process (18+; a trusted host-provided runtime may be used). The launcher
+tries existing Python command names/Windows `py` and validates Python 3.11+ plus
+sqlite3, so a missing `python3` alias alone no longer blocks startup. Set
+`RELAYFORGE_PYTHON` to a verified executable path to select another installation.
+No software is installed and PATH is not changed during startup.
+
+Run `node scripts/progress-launcher.cjs --doctor` from the plugin root for bounded
+JSON diagnostics. MCP startup failures remain on stderr with an actionable error
+category. The conditional [environment recovery workflow](skills/task-router/references/progress-environment.md)
+notifies the user, prefers existing runtime repairs, and assists authorized
+installation only when needed. A missing card does not prove missing Python.
+Hosts without MCP Apps use text updates; successful runtime checks do not prove
+inline rendering. New tools may require a new chat after a plugin update.
 
 The tools create (`start_progress`), update (`update_progress`) and reopen
 (`open_progress`, on request) a task card. `load_progress_skill` reads a selected
@@ -299,6 +311,7 @@ python3 -m json.tool .claude-plugin/plugin.json
 python3 -m json.tool mcp.json
 python3 -m json.tool .mcp.json
 python3 -m unittest discover -s tests -v
+node --test scripts/progress-launcher.test.cjs
 ```
 
 For progress server, state or registration changes, run:

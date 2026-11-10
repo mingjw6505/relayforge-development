@@ -64,6 +64,7 @@ def test_stdio_lifecycle_and_scoped_reopen(tmp_path: Path) -> None:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        encoding="utf-8",
     )
 
     def call(identifier: int, method: str, params: dict) -> dict:
