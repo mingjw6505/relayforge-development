@@ -4,6 +4,9 @@ Use the bundled `relayforge-progress` tools when available. Create one inline
 card per development task with `start_progress`, retain its `run_id` and revision,
 and update at real milestones. Do not create a card for unrelated questions or
 repeat its checklist in chat. Missing tools/UI must not block the requested work.
+For failures or requested checks, apply [environment recovery](progress-environment.md)
+to notify, inspect and assist authorized repair; an absent card does not prove
+Python is missing.
 
 ## Start and load selected instructions
 

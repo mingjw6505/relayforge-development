@@ -62,9 +62,10 @@ optional Codex Hook telemetry. It is not a RelayForge application service.
 ## Progress panel and telemetry
 
 - Keep `mcp.json` and `.mcp.json` equivalent apart from portable schema/type fields.
-  Preserve plugin-relative `cwd: "./"`; the registered command needs `python3`
-  resolving to Python 3.11+ in the host environment.
-- Keep server runtime dependencies in the Python standard library. npm packages
+  Preserve plugin-relative `cwd: "./"`; the registered Node.js 18+ launcher selects
+  an existing Python 3.11+ with sqlite3. Keep diagnostics off MCP stdout.
+- Keep server runtime dependencies in the Python standard library and the
+  bootstrap in Node built-ins (no runtime npm dependencies). npm packages
   are for UI development; the shipped UI must work without runtime npm or a CDN.
 - Edit UI source under `progress_panel/web/src/`, then rebuild the shipped HTML
   and license notices. Rebuild on version changes too: the UI embeds `plugin.json`
@@ -101,6 +102,10 @@ For registration changes, also validate `mcp.json` and `.mcp.json` with
 python3 -m pytest progress_panel/tests
 python3 -m mypy --strict progress_panel/state.py progress_panel/server.py progress_panel/skills.py
 ```
+
+For bootstrap changes also run `node --test scripts/progress-launcher.test.cjs`
+and `node scripts/progress-launcher.cjs --doctor`. A passing isolated doctor does
+not verify real state-directory permissions or host UI rendering.
 
 For UI source, build tooling or embedded version changes, run:
 

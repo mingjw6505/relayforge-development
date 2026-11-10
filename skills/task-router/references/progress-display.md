@@ -12,8 +12,11 @@ user action. Keep the final reply concise: the result, relevant checks and any
 remaining gap. Do not require fixed routing or finishing metadata footers.
 
 If tools or UI are unavailable, briefly report the current work or blocker in
-plain language at meaningful changes. Keep working without an installation,
-permission change or retry loop. Honor requests to reduce updates. Normal host
+plain language at meaningful changes. Apply [environment recovery](progress-environment.md)
+once for missing tools, startup errors, reported UI failures or requested checks:
+inspect first, prefer existing runtimes, assist repair within user authorization,
+and verify runtime/host/UI separately. Do not silently install, change permissions
+or loop through retries. Honor requests to reduce updates. Normal host
 communication requirements still apply; a panel does not replace necessary
 questions, explanations or the final result.
 

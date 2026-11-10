@@ -16,6 +16,9 @@ context without restarting routing or creating a second coordinator.
 For implementation tasks, read and apply the shared
 [progress display](references/progress-display.md). Prefer the inline card;
 keep chat focused on useful findings, blockers and the final result.
+When tools are missing or a card failure is reported, follow the conditional
+[environment recovery](references/progress-environment.md): diagnose once, prefer
+an existing runtime, then assist authorized repair without blocking development.
 
 ## Inspect once, decide
 

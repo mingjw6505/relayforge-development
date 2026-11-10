@@ -69,14 +69,66 @@ L2/L3 也不因加载相同工作流而混淆。模式相邻升降级；变更�
 
 ## 运行与兼容
 
-- PATH 中需要 Python 3.11+；运行服务只使用标准库。
+- 宿主 PATH 中需要 Node.js 18+；引导器只用 Node 内置模块，不依赖 npm 包。
+- 服务需要 Python 3.11+（含 sqlite3），只用 Python 标准库；引导器自动选择已有兼容解释器。
 - 界面和 SDK 已打包，运行时无需 npm、CDN、API Key 或外部服务。
 - portable 注册使用根 `plugin.json` / `mcp.json`，兼容注册使用
   `.codex-plugin/plugin.json` / `.mcp.json`；启动目录相对插件根解析。
 - 更新插件后用新聊天验证新工具。重启 App 并不保证旧聊天获得新工具；若工具
-  缺失，工作流继续开发并简短说明，不自动修改配置或循环要求重启。
+  缺失，工作流继续开发并简短提醒，按环境恢复流程诊断一次；不静默安装或循环要求重启。
 - 不支持 MCP Apps 的宿主可继续 Skill 和文字工作流。跨平台 App 行为仍需独立验收。
 - 已有 0.1.13 快照保留且可读取；缺少新增字段时显示未记录/未申报，不补造历史。
+
+## 环境自检与协助修复
+
+注册入口为 `node ./scripts/progress-launcher.cjs`，保留插件根目录 `cwd: "./"`。
+Node 必须对宿主进程可用；Agent 终端能运行 Node 不代表 App 的 PATH 一定相同。
+本次启动方式新增 Node.js 18+ 前提，宿主未提供时须单独检测并引导配置或安装。
+它解决 Python 命令名差异，不保证任意宿主完全零配置。
+
+Windows 依次尝试 `py -3`、`python3`、`python`，再尝试 `py -3.15` 至
+`py -3.11`；macOS/Linux 尝试 `python3`、`python`，再尝试版本化命令
+`python3.15` 至 `python3.11`。每个候选最多 1.2 秒，总探测预算 6.5 秒。
+校验版本、sqlite3、有效 JSON 后使用返回的真实解释器绝对路径启动服务，不重复解析别名。
+不兼容解释器、空的 Windows Store 别名、超时和无法执行均不会被当作有效 Python。
+预算耗尽不等于电脑没有安装 Python。
+
+`RELAYFORGE_PYTHON` 可指定一个解释器可执行文件路径（不能填 `py -3` 等命令串）。
+该覆盖严格生效：失败会报告原因，不偷偷改用另一个环境。启动时不安装软件、
+不创建别名、不修改 PATH；服务退出后不自动重放 MCP 输入或更换解释器重试。
+
+在插件根目录执行：
+
+```sh
+node scripts/progress-launcher.cjs --doctor
+```
+
+自检 JSON 包含所选解释器、版本、候选失败分类以及包检查结果。检查模块加载、
+工具发现、打包 HTML 和临时目录内的 SQLite 读写；不读取真实任务，不检查真实
+状态目录读写权限。`host_tools`、`host_ui`、`state_directory` 明确标为
+`unverified`，避免把本地检查说成宿主 UI 验收。
+正常 MCP 启动不输出额外 stdout；诊断写 stderr，供宿主日志和 Agent 排查。
+自检模式才在 stdout 输出 JSON。
+
+| 结果 / 退出码 | 含义与后续动作 |
+| --- | --- |
+| `runtime_ready` / 0 | 本地检查通过，继续确认宿主工具和实际卡片显示 |
+| `python_unavailable` / 78 | 未找到可用候选；按 failures 区分不存在、旧版本、SQLite 缺失、超时或无效别名，先查已有环境 |
+| `node_too_old` / 78 | 使用宿主提供或已安装的 Node.js 18+ |
+| `package_check_failed` / 70 | Python 正常但包/资源/临时 SQLite 检查失败，检查插件而非盲目重装 Python |
+| `server_spawn_failed` 或 `server_exited` / 非零 | 服务无法启动或异常退出，保留诊断且不自动重试 |
+| `invalid_arguments` / 64 | 启动仅接受无参数或 `--doctor` |
+
+若 Node 本身不存在，引导器不能运行，提醒依赖仍可加载的 Skill/Agent。
+Skill 负责一次性文字提醒并执行[环境恢复流程](../skills/task-router/references/progress-environment.md)：
+先检查已有运行时和入口；有授权时修复用户环境或支持的本地覆盖配置；确实缺少
+环境才通过官方来源协助安装，说明版本、范围、PATH 变更和权限要求并复用已有授权。
+普通开发请求不默认授权安装软件，不直接改插件缓存，也不绕过管理员或安全限制。
+若宿主不能执行命令，则提供手动步骤。插件整体未加载时无法保证自动提醒。
+
+服务正常但工具缺失时确认当前插件版本与聊天工具目录；必要时只做一次新聊天/加载验证。
+工具调用成功但卡片未显示时检查 MCP Apps 内嵌渲染支持，不通过重装 Python 处理。
+最终分别报告运行时、宿主 MCP、调用与可见性证据；UI 未确认就明确保留缺口。
 
 ## 更新与隔离
 
@@ -137,6 +189,8 @@ npm --prefix progress_panel/web test
 python3 -m pytest progress_panel/tests
 python3 -m mypy --strict progress_panel/state.py progress_panel/server.py progress_panel/skills.py
 python3 -m unittest discover -s tests -v
+node --test scripts/progress-launcher.test.cjs
+node scripts/progress-launcher.cjs --doctor
 ```
 
 模拟预览复用正式卡片的 `card.html`、`card.css`、`view.mjs` 和 `render.mjs`，
