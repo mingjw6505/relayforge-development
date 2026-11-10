@@ -109,6 +109,8 @@ def details(value: object) -> Snapshot:
         "current",
         "change",
         "remaining",
+        "waiting_for",
+        "reason",
         "verification",
     }:
         raise ProgressError("invalid_details")
@@ -117,6 +119,8 @@ def details(value: object) -> Snapshot:
         for key, item in value.items()
         if key != "verification"
     }
+    if "waiting_for" in result and result["waiting_for"] not in {"user", "external"}:
+        raise ProgressError("invalid_waiting_for")
     if "verification" not in value:
         return result
     verification = value["verification"]
@@ -158,6 +162,37 @@ def details(value: object) -> Snapshot:
         "source": "agent_declared",
     }
     return result
+
+
+def stage_details(value: Snapshot, status: str) -> Snapshot:
+    """Keep declarations valid for this state without inferring check results."""
+    result = dict(value)
+    if status != "waiting":
+        result.pop("waiting_for", None)
+    if status not in {"waiting", "blocked"}:
+        result.pop("reason", None)
+    if status in {"completed", "cancelled"}:
+        result.pop("current", None)
+        result.pop("remaining", None)
+    return result
+
+
+def stage_event(
+    revision: int, at: str, status: str, summary: str,
+    execution: Snapshot, declared_steps: list[dict[str, str]],
+) -> Snapshot:
+    """Store the bounded declarations needed to read a past milestone."""
+    event: Snapshot = {
+        "revision": revision, "at": at, "status": status,
+        "summary": summary, "details": execution,
+    }
+    current = next(
+        (step["label"] for step in declared_steps if step["status"] in {"active", "blocked"}),
+        None,
+    )
+    if current:
+        event["current_step"] = current
+    return event
 
 
 @dataclass(frozen=True)
@@ -229,6 +264,7 @@ class ProgressStore:
         title = text(title, 80)
         summary = text(summary, 240, empty=True)
         declared_steps = steps(declared_steps, "running")
+        execution = stage_details(details(execution) if execution is not None else {}, "running")
         now = timestamp()
         identifier = str(uuid.uuid4())
         snapshot: Snapshot = {
@@ -240,13 +276,13 @@ class ProgressStore:
             "status": "running",
             "steps": declared_steps,
             "summary": summary,
-            "details": details(execution) if execution is not None else {},
+            "details": execution,
             "workflow": None,
             "skill_loads": [],
             "created_at": now,
             "updated_at": now,
             "history": [
-                {"revision": 1, "at": now, "status": "running", "summary": summary}
+                stage_event(1, now, "running", summary, execution, declared_steps)
             ],
         }
         with self.connection() as connection:
@@ -284,10 +320,11 @@ class ProgressStore:
         with self.connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
             current = self._read(connection, identifier)
-            execution = (
+            execution = stage_details(
                 details(execution)
                 if execution is not None
-                else current.get("details", {})
+                else current.get("details", {}),
+                status,
             )
             if current["revision"] != expected_revision:
                 identical_retry = (
@@ -305,7 +342,7 @@ class ProgressStore:
             now = timestamp()
             revision = expected_revision + 1
             history = current["history"] + [
-                {"revision": revision, "at": now, "status": status, "summary": summary}
+                stage_event(revision, now, status, summary, execution, declared_steps)
             ]
             updated = dict(
                 current,

@@ -165,6 +165,65 @@ def test_verification_independent_of_completion_and_metadata_is_preserved(
     assert load(server, stored, "finishing-development")["isError"]
 
 
+def test_history_retains_stage_details_and_completion_clears_stale_actions(tmp_path: Path):
+    server = ProgressServer(tmp_path / "state")
+    state = start(server)
+    first_details = {
+        "current": "验证重试",
+        "change": "补齐幂等校验",
+        "remaining": "超时恢复",
+        "verification": {"status": "partial", "evidence": "超时场景尚未验证"},
+    }
+    server.call_tool("update_progress", {
+        "run_id": state["run_id"], "expected_revision": 1,
+        "status": "running", "steps": state["steps"], "details": first_details,
+    })
+    server.call_tool("update_progress", {
+        "run_id": state["run_id"], "expected_revision": 2,
+        "status": "completed", "steps": [{"label": "修复", "status": "done"}],
+    })
+    stored = server.store.read(state["run_id"])
+    previous = stored["history"][-2]
+    assert previous["details"]["change"] == "补齐幂等校验"
+    assert previous["current_step"] == "修复"
+    assert previous["details"]["verification"]["status"] == "partial"
+    assert "current" not in stored["details"]
+    assert "remaining" not in stored["details"]
+    assert stored["details"]["verification"]["status"] == "partial"
+    retry = server.call_tool("update_progress", {
+        "run_id": state["run_id"], "expected_revision": 2,
+        "status": "completed", "steps": [{"label": "修复", "status": "done"}],
+    })
+    assert not retry.get("isError")
+    assert server.store.read(state["run_id"])["revision"] == 3
+
+
+def test_waiting_reason_is_validated_and_cleared_when_work_resumes(tmp_path: Path):
+    server = ProgressServer(tmp_path / "state")
+    state = start(server)
+    arguments = {
+        "run_id": state["run_id"], "expected_revision": 1,
+        "status": "waiting", "steps": state["steps"],
+        "details": {"waiting_for": "external", "reason": "等待构建结果"},
+    }
+    result = server.call_tool("update_progress", arguments)
+    assert not result.get("isError")
+    waiting = server.store.read(state["run_id"])
+    assert waiting["details"]["waiting_for"] == "external"
+    assert waiting["history"][-1]["details"]["reason"] == "等待构建结果"
+    server.call_tool("update_progress", {
+        "run_id": state["run_id"], "expected_revision": 2,
+        "status": "running", "steps": state["steps"],
+    })
+    resumed = server.store.read(state["run_id"])
+    assert "waiting_for" not in resumed["details"]
+    assert "reason" not in resumed["details"]
+    result = server.call_tool("update_progress", {
+        **arguments, "expected_revision": 3, "details": {"waiting_for": "invented"},
+    })
+    assert result["isError"]
+
+
 @pytest.mark.parametrize(
     "verification",
     [

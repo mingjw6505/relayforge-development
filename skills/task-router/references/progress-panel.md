@@ -48,9 +48,22 @@ or reconfigure the host just to populate the card.
 
 `update_progress` requires the existing run ID, last revision, actual run status
 and full step list. Optional `details` replaces the details object; omission keeps
-the previous declaration. Include short concrete changes and remaining work.
+the applicable previous declaration. Include short concrete changes and remaining work.
 When scope or checks change, replace stale verification instead of retaining an
 old pass. Do not emit updates for every tool call or timer tick.
+
+For a real wait, declare `details.waiting_for` as `user` or `external` and put its
+short reason in `details.reason`; `details.remaining` states the next action.
+Omit the waiting target when it is unknown; the card will not assume the user
+must respond. A blocked attempt should also declare its reason and next action.
+These are metadata declarations, not raw error output.
+
+Leaving waiting clears its target; leaving waiting/blocked clears the reason.
+Completion/cancellation clears old current and remaining declarations while
+preserving verification. Supply a final summary. The completed view shows no
+remaining work in the agreed scope; it never turns partial verification into a pass.
+New milestone history stores bounded details for later inspection. Missing legacy
+details are not reconstructed, and retained history is capped at 20 entries.
 
 ```json
 {
@@ -89,8 +102,10 @@ storage failure means unavailable progress: report the gap once and continue.
 ## Display and boundaries
 
 The resource and MCP Apps initialization are inline-only; there is no automatic
-thread side-panel entrypoint. The card reads its task every two seconds without
-model calls. Keep details and records inside the card. Do not call the render tool
+thread side-panel entrypoint. The visible card reads its task every two seconds without
+model calls; hidden pages suspend reads and unchanged revisions do not redraw.
+Permanent missing-state errors stop polling, while temporary failures retry.
+Keep details and records inside the card. Do not call the render tool
 again to refresh; use `open_progress(run_id)` only when the user requests another
 display. A missing MCP Apps automation tab alone says nothing about inline cards.
 

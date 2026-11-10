@@ -24,6 +24,10 @@ export class PanelPoller {
     this.closed = false;
     this.generation = 0;
     this.errors = 0;
+    this.hidden = false;
+    this.unavailable = false;
+    this.refreshPending = false;
+    this.inFlight = false;
   }
 
   bind(value, {replace = false} = {}) {
@@ -38,23 +42,25 @@ export class PanelPoller {
       this.snapshot = null;
       this.errors = 0;
       this.paused = false;
+      this.unavailable = false;
     }
     if (this.snapshot && value.revision < this.snapshot.revision) return false;
+    const changed = !this.snapshot || value.revision > this.snapshot.revision;
     this.runId = value.run_id;
-    this.snapshot = value;
-    if (terminal(value.status)) {
+    if (changed) this.snapshot = value;
+    if (terminal(this.snapshot.status)) {
       this.cancel(this.timer);
       this.timer = null;
       this.generation += 1;
     }
-    this.onSnapshot(value);
-    if (this.ready && !this.timer && !this.inFlight && !this.paused && !terminal(value.status)) this.poll();
+    if (changed) this.onSnapshot(value);
+    if (this.canPoll() && !this.timer && !this.inFlight) this.poll();
     return true;
   }
 
   connected() {
     this.ready = true;
-    if (this.runId && !this.paused && !terminal(this.snapshot.status)) this.poll();
+    if (this.canPoll()) this.poll();
   }
 
   pause() {
@@ -68,7 +74,29 @@ export class PanelPoller {
   resume() {
     if (this.closed) return;
     this.paused = false;
-    if (this.ready && this.runId && !this.inFlight && !terminal(this.snapshot.status)) this.poll();
+    if (this.canPoll()) {
+      this.onState('connecting');
+      if (this.inFlight) this.refreshPending = true;
+      else this.poll();
+    }
+  }
+
+  /** Visibility is independent of a user pause; restoring one must not undo the other. */
+  setVisible(visible) {
+    if (this.hidden === !visible) return;
+    this.hidden = !visible;
+    this.generation += 1;
+    this.cancel(this.timer);
+    this.timer = null;
+    if (this.canPoll()) {
+      if (this.inFlight) this.refreshPending = true;
+      else this.poll();
+    }
+  }
+
+  canPoll() {
+    return this.ready && !this.paused && !this.hidden && !this.closed && !this.unavailable
+      && this.runId && this.snapshot && !terminal(this.snapshot.status);
   }
 
   close() {
@@ -77,7 +105,7 @@ export class PanelPoller {
   }
 
   async poll() {
-    if (!this.ready || this.paused || this.closed || this.inFlight || !this.runId) return;
+    if (!this.canPoll() || this.inFlight) return;
     const generation = this.generation;
     this.inFlight = true;
     this.timer = null;
@@ -85,11 +113,18 @@ export class PanelPoller {
       const result = await this.callTool({name: 'read_progress', arguments: {run_id: this.runId}});
       if (generation !== this.generation || this.closed) return;
       const next = result.structuredContent;
+      if (result.isError && ['unknown_run', 'invalid_run_id'].includes(next?.error)) {
+        this.unavailable = true;
+        this.onState('unavailable');
+        return;
+      }
       if (result.isError || !validSnapshot(next) || next.run_id !== this.runId) throw new Error('invalid_snapshot');
       if (next.revision < this.snapshot.revision) throw new Error('stale_snapshot');
-      this.snapshot = next;
       this.errors = 0;
-      this.onSnapshot(next);
+      if (next.revision > this.snapshot.revision) {
+        this.snapshot = next;
+        this.onSnapshot(next);
+      }
       this.onState('synced');
     } catch {
       if (generation === this.generation && !this.closed) {
@@ -98,8 +133,10 @@ export class PanelPoller {
       }
     } finally {
       this.inFlight = false;
-      if (!this.closed && !this.paused && this.ready && this.snapshot && !terminal(this.snapshot.status)) {
-        this.timer = this.schedule(() => this.poll(), Math.min(30000, 2000 * 2 ** Math.min(this.errors, 4)));
+      if (this.canPoll()) {
+        const delay = this.refreshPending ? 0 : Math.min(30000, 2000 * 2 ** Math.min(this.errors, 4));
+        this.refreshPending = false;
+        this.timer = this.schedule(() => this.poll(), delay);
       }
     }
   }

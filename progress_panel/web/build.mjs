@@ -5,11 +5,17 @@ import {fileURLToPath} from 'node:url';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const manifest = JSON.parse(await readFile(resolve(root, '../../plugin.json'), 'utf8'));
+const [styles, card] = await Promise.all([
+  readFile(resolve(root, 'src/card.css'), 'utf8'),
+  readFile(resolve(root, 'src/card.html'), 'utf8'),
+]);
 const result = await build({entryPoints: [resolve(root, 'src/main.js')], bundle: true,
   format: 'esm', platform: 'browser', minify: true, write: false, metafile: true,
   define: {__PLUGIN_VERSION__: JSON.stringify(manifest.version)}, legalComments: 'eof'});
 const template = await readFile(resolve(root, 'src/panel.html'), 'utf8');
 const html = template.replace('{{VERSION}}', manifest.version)
+  .replace('{{STYLE}}', () => styles)
+  .replace('{{CARD}}', () => card)
   .replace('{{SCRIPT}}', () => result.outputFiles[0].text.replace(/<\/script/gi, '<\\/script'));
 await mkdir(resolve(root, '../static'), {recursive: true});
 await writeFile(resolve(root, '../static/panel.html'), html);
