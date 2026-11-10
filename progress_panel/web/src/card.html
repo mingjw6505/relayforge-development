@@ -2,9 +2,11 @@
 <article class="rf-card" data-ui="task" aria-label="开发进度" hidden>
   <header class="rf-top"><span class="rf-brand">RelayForge · 开发进度</span><span class="rf-status" data-ui="status" role="status"></span></header>
   <h1 data-ui="title"></h1>
+  <div class="rf-mode-row"><span class="rf-mode-label">开发模式</span><span class="rf-mode-badge" data-ui="mode"></span><span class="rf-mode-description" data-ui="mode-description"></span></div>
   <p class="rf-phase" data-ui="phase"></p>
   <div class="rf-work">
     <div class="rf-row rf-current"><span class="rf-label" data-ui="current-label">当前</span><span class="rf-value" data-ui="current"></span></div>
+    <section class="rf-methods" data-ui="methods" aria-label="所选开发方法的阶段进度" hidden></section>
     <div class="rf-row rf-change" data-ui="change-row"><span class="rf-label">进展</span><span class="rf-value" data-ui="change"></span></div>
     <div class="rf-row"><span class="rf-label">验证</span><div class="rf-verification" data-ui="verification" aria-label="Agent 申报的验证结果"></div></div>
   </div>
@@ -18,7 +20,7 @@
     <button class="rf-text-button rf-more" type="button" data-ui="more-history" hidden>展开全部记录</button>
     <h2>验证依据</h2><p class="rf-evidence" data-ui="evidence"></p>
     <div data-ui="load-section" hidden><h2>工作流与 Skill 加载</h2><p class="rf-workflow">工作流：<span data-ui="workflow"></span></p><ol class="rf-loads" data-ui="loads"></ol></div>
-    <p class="rf-source">步骤、进展与验证由 Agent 申报。Skill 凭据只证明已读取说明，不代表执行或成功。阶段历史最多保留最近 20 条。</p>
+    <p class="rf-source">开发模式、方法阶段、步骤及验证由 Agent 申报。Skill 凭据只证明已读取说明，不代表执行或成功。阶段历史最多保留最近 20 条。</p>
     <button class="rf-control-button" data-ui="refresh" type="button">暂停刷新</button>
   </section>
 </article>

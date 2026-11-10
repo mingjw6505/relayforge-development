@@ -110,7 +110,7 @@ def test_old_snapshots_without_execution_fields_survive_updates(tmp_path: Path):
 
     server = ProgressServer(tmp_path / "state")
     state = start(server)
-    for key in ("details", "skill_loads", "workflow"):
+    for key in ("details", "skill_loads", "workflow", "execution_mode", "method_progress"):
         state.pop(key, None)
     with server.store.connection() as connection:
         connection.execute(

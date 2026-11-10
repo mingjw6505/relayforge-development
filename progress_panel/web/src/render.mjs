@@ -44,6 +44,8 @@ export function createPanel(root, {onPauseToggle = () => {}} = {}) {
       summary.append(at, node('span', view.title));
       const body = node('div', '', 'rf-history-body');
       const lines = [
+        ['当时模式', view.mode],
+        ['方法进度', view.methods.map(method => `${method.title}：${method.current}`).join('；')],
         ['当时动作', view.current], ['当时变更', view.change], ['当时剩余', view.remaining],
         ['等待／受阻原因', view.reason],
         ['当时验证', view.verification.map(value => value.text).join(' · ')], ['验证依据', view.evidence],
@@ -65,6 +67,30 @@ export function createPanel(root, {onPauseToggle = () => {}} = {}) {
     const ended = latest && terminal(latest.status);
     el('refresh').disabled = Boolean(ended || syncState === 'unavailable');
     el('refresh').textContent = ended ? '任务已结束' : syncState === 'unavailable' ? '记录不可用' : paused ? '恢复刷新' : '暂停刷新';
+  }
+
+  function renderMethods(methods) {
+    el('methods').hidden = methods.length === 0;
+    el('methods').replaceChildren(...methods.map(method => {
+      const track = node('div', '', 'rf-method-track');
+      track.dataset.method = method.key;
+      const heading = node('div', '', 'rf-method-heading');
+      heading.append(node('span', method.title, 'rf-method-name'), node('span', method.current, 'rf-method-current'));
+      const phases = node('ol', '', 'rf-method-phases');
+      phases.setAttribute('aria-label', `${method.title}阶段`);
+      phases.append(...method.phases.map(phase => {
+        const item = node('li', '', `rf-method-phase rf-phase-${phase.status}`);
+        item.setAttribute('aria-label', `${phase.label}：${phase.stateLabel}`);
+        if (phase.status === 'active') item.setAttribute('aria-current', 'step');
+        const mark = node('span', stepIcons[phase.status], 'rf-phase-mark');
+        mark.setAttribute('aria-hidden', 'true');
+        item.append(mark, node('span', phase.label));
+        return item;
+      }));
+      const count = `${method.done} / ${method.total} 阶段已完成${method.skipped ? ` · ${method.skipped} 阶段已跳过` : ''}`;
+      track.append(heading, phases, node('p', count, 'rf-method-count'));
+      return track;
+    }));
   }
 
   function updateFreshness(now = Date.now()) {
@@ -95,6 +121,10 @@ export function createPanel(root, {onPauseToggle = () => {}} = {}) {
     el('task').hidden = false;
     root.dataset.status = snapshot.status;
     for (const key of ['title', 'status', 'current', 'change', 'remaining', 'phase', 'workflow']) el(key).textContent = view[key];
+    el('mode').textContent = view.mode;
+    el('mode-description').textContent = view.modeDescription;
+    el('mode-description').hidden = !view.modeDescription;
+    renderMethods(view.methods);
     el('current-label').textContent = view.currentLabel;
     el('phase').hidden = !view.phase;
     el('change-row').hidden = !view.change;

@@ -14,6 +14,12 @@ Read and apply [progress display](../task-router/references/progress-display.md)
 including for a direct planning-only request. Reuse the task's inline card when
 available; finish the planning scope without implying implementation occurred.
 
+When the task already selected SDD, use the
+[mode/method contract](../task-router/references/progress-panel.md#mode-method-progress-and-concrete-action)
+to mark its actual planning phase active and describe the concrete planning action.
+Preserve the routed L1/L2/L3 mode and other phases; a Skill load alone never marks
+the specification or plan complete. Do not create additional documents for the card.
+
 ## Scope and storage
 
 Read affected code, tests and existing decisions. Separate agreed requirements

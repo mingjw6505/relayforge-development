@@ -66,6 +66,12 @@ without duplicating the ticket backlog. Preserve IDs and acceptance by reference
 | Standard / L2 | Needs minimal specification/design; one primary writer can manage it, including across sessions | Use development-workflow; persist only necessary decisions and tasks. |
 | Large / L3 | Substantial tasks or contexts need persistent contract, ownership and dependency coordination | Use development-workflow with a durable plan; delegation and parallelism remain optional. |
 
+Once selected, declare the route as `execution_mode` on the task's progress card
+when supported. Declare selected SDD/TDD/coordination phase tracks separately
+and use `details.current` for the actual action. Follow the
+[progress contract](references/progress-panel.md#mode-method-progress-and-concrete-action);
+loading a workflow neither selects a mode nor advances a method phase.
+
 Do not size work from framework names, layer/file counts or missing product intent.
 Resolve the intent first. Choose methods independently:
 

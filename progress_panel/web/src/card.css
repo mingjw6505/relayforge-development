@@ -30,7 +30,23 @@
 .rf-progress .rf-status::before {content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex: none}
 .rf-progress[data-status="blocked"] .rf-status {color: var(--rf-fail)}
 .rf-progress h1 {margin: 12px 0 3px; font-size: 16px; line-height: 1.5; font-weight: 600}
+.rf-progress .rf-mode-row {display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin: 13px 0 9px; font-size: 11px}
+.rf-progress .rf-mode-label, .rf-progress .rf-mode-description {color: var(--rf-muted)}
+.rf-progress .rf-mode-badge {background: var(--rf-hover); color: var(--rf-text); padding: 3px 9px; border-radius: 5px; font-weight: 500}
 .rf-progress .rf-phase {font-size: 11px; color: var(--rf-muted); margin: 0}
+.rf-progress .rf-methods {display: grid; gap: 15px; margin: 1px 0 2px; padding: 12px 0; border-top: 1px solid var(--rf-line); border-bottom: 1px solid var(--rf-line)}
+.rf-progress .rf-method-heading {display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 5px 12px; margin-bottom: 9px; font-size: 12px}
+.rf-progress .rf-method-name {font-weight: 500; color: var(--rf-text)}
+.rf-progress .rf-method-current {color: var(--rf-secondary); font-size: 11px}
+.rf-progress .rf-method-phases {display: flex; flex-wrap: wrap; gap: 7px 8px}
+.rf-progress .rf-method-phase {display: inline-flex; gap: 6px; align-items: flex-start; padding: 5px 8px; color: var(--rf-muted); font-size: 11px; border-radius: 6px; max-width: 100%; min-width: 0}
+.rf-progress .rf-phase-mark {width: 13px; height: 13px; border: 1px solid currentColor; border-radius: 50%; display: grid; place-items: center; margin-top: 2px; flex: none; font-size: 10px; line-height: 1}
+.rf-progress .rf-phase-done {color: var(--rf-pass)}
+.rf-progress .rf-phase-active {color: var(--rf-active); background: var(--rf-active-bg)}
+.rf-progress .rf-phase-active .rf-phase-mark::after {content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor}
+.rf-progress .rf-phase-blocked {color: var(--rf-fail); background: var(--rf-blocked-bg)}
+.rf-progress .rf-phase-skipped .rf-phase-mark {border-style: dashed}
+.rf-progress .rf-method-count {font-size: 11px; color: var(--rf-muted); margin: 7px 0 0}
 .rf-progress .rf-work {display: grid; gap: 12px; margin-top: 18px}
 .rf-progress .rf-row, .rf-progress .rf-next {display: flex; align-items: baseline; gap: 12px; min-width: 0}
 .rf-progress .rf-label {width: 42px; flex: 0 0 42px; font-size: 12px; color: var(--rf-secondary)}

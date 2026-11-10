@@ -12,6 +12,13 @@ Read and apply [progress display](../task-router/references/progress-display.md)
 when entering finishing, including direct selection. Update the task's inline card
 with its actual outcome; keep the final reply concise and evidence-based.
 
+Preserve the selected L1/L2/L3 `execution_mode` when entering finishing. Update
+only already-selected method tracks to their actual finishing phase where one
+exists; do not add optional reviews or publication phases. Follow the
+[mode/method contract](../task-router/references/progress-panel.md#mode-method-progress-and-concrete-action):
+explicitly end declared method tracks before ending the task, without converting
+unfinished phases to done or partial verification to passed.
+
 ## Choose finishing scope once
 
 Reuse choices already stated in the request or conversation, including exclusions

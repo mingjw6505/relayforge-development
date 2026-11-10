@@ -5,6 +5,34 @@ const verificationNames = {
   not_run: '未执行', running: '验证中', passed: '检查通过', failed: '检查失败',
   partial: '部分验证', skipped: '已跳过', unavailable: '结果不可用',
 };
+const modeNames = {L1: 'Quick / L1', L2: 'Standard / L2', L3: 'Large / L3'};
+const modeDescriptions = {L1: '快速开发', L2: '标准开发', L3: '大型任务'};
+const methodNames = {sdd: 'SDD · 规格驱动', tdd: 'TDD · 测试驱动', coordination: '协作与依赖协调'};
+const phaseNames = {pending: '待处理', active: '进行中', done: '已完成', blocked: '受阻', skipped: '已跳过'};
+
+/** Selected mode and method phases come from declarations, never skill receipts. */
+function executionView(snapshot) {
+  const mode = Object.hasOwn(modeNames, snapshot.execution_mode) ? modeNames[snapshot.execution_mode] : '未申报';
+  const declared = Array.isArray(snapshot.method_progress) ? snapshot.method_progress : [];
+  const methods = declared.filter(item => item?.source === 'agent_declared'
+    && Object.hasOwn(methodNames, item.method) && Object.hasOwn(statusNames, item.status)
+    && Array.isArray(item.phases) && item.phases.length > 0 && item.phases.length <= 8
+    && item.phases.every(phase => typeof phase?.label === 'string' && Object.hasOwn(phaseNames, phase.status)))
+    .map(item => {
+      const phase = item.phases.find(value => ['active', 'blocked'].includes(value.status));
+      const ended = ['completed', 'blocked', 'cancelled'].includes(item.status);
+      return {
+        key: item.method, title: methodNames[item.method], status: item.status,
+        current: ended ? (item.status === 'blocked' && phase ? `${phase.label} · 受阻` : statusNames[item.status])
+          : phase ? `${phase.label} · ${phaseNames[phase.status]}` : statusNames[item.status],
+        done: item.phases.filter(value => value.status === 'done').length,
+        skipped: item.phases.filter(value => value.status === 'skipped').length,
+        total: item.phases.length,
+        phases: item.phases.map(value => ({...value, stateLabel: phaseNames[value.status]})),
+      };
+    });
+  return {mode, modeDescription: mode === '未申报' ? '' : modeDescriptions[snapshot.execution_mode], methods};
+}
 
 function verificationView(value) {
   const verification = value?.source === 'agent_declared' ? value : null;
@@ -27,12 +55,15 @@ function verificationView(value) {
 
 /** Present a milestone using only declarations actually stored at that revision. */
 export function historyView(event) {
+  const execution = executionView(event);
+  const context = {mode: execution.mode === '未申报' ? '' : execution.mode, methods: execution.methods};
   if (event.kind === 'skill_loaded') {
-    return {title: `已加载 ${event.skill}`, current: '', change: '', remaining: '', reason: '', verification: [], evidence: ''};
+    return {...context, title: `已加载 ${event.skill}`, current: '', change: '', remaining: '', reason: '', verification: [], evidence: ''};
   }
   const info = event.details ?? {};
   const verification = info.verification ? verificationView(info.verification) : null;
   return {
+    ...context,
     title: event.summary || info.change || info.reason || info.current || event.current_step || statusNames[event.status] || '已记录状态',
     current: info.current || event.current_step || '',
     change: info.change || '',
@@ -81,8 +112,9 @@ export function cardView(snapshot) {
   const change = info.change || snapshot.summary || '';
   const index = currentStep ? snapshot.steps.indexOf(currentStep) : -1;
   return {
+    ...executionView(snapshot),
     title: snapshot.title, status, currentLabel, current,
-    phase: index >= 0 ? `第 ${index + 1} / ${snapshot.steps.length} 步 · ${currentStep.label}` : '',
+    phase: index >= 0 ? `任务步骤 ${index + 1} / ${snapshot.steps.length} · ${currentStep.label}` : '',
     change: change === current ? '' : change,
     remaining, workflow, receipts, skills: receipts.filter(item => item.kind === 'skill'),
     verification: verification.items, evidence: verification.evidence || '未提供验证依据',

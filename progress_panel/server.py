@@ -16,7 +16,7 @@ from progress_panel.state import ProgressError, ProgressStore
 
 RESOURCE_URI = "ui://relayforge-development/progress-v2.html"
 MAX_REQUEST_BYTES = 16 * 1024
-STEP_SCHEMA = {
+STEP_SCHEMA: dict[str, Any] = {
     "type": "array",
     "minItems": 1,
     "maxItems": 12,
@@ -34,6 +34,24 @@ STEP_SCHEMA = {
     },
 }
 ID_SCHEMA = {"type": "string", "format": "uuid"}
+MODE_SCHEMA = {"type": "string", "enum": ["L1", "L2", "L3"]}
+METHOD_PROGRESS_SCHEMA = {
+    "type": "array", "maxItems": 3,
+    "items": {
+        "type": "object", "additionalProperties": False,
+        "required": ["method", "status", "phases"],
+        "properties": {
+            "method": {"type": "string", "enum": ["sdd", "tdd", "coordination"]},
+            "status": {"type": "string", "enum": ["running", "waiting", "completed", "blocked", "cancelled"]},
+            "phases": {**STEP_SCHEMA, "maxItems": 8, "items": {
+                **STEP_SCHEMA["items"], "properties": {
+                    **STEP_SCHEMA["items"]["properties"],
+                    "label": {"type": "string", "minLength": 1, "maxLength": 40},
+                },
+            }},
+        },
+    },
+}
 SUMMARY_SCHEMA = {"type": "string", "maxLength": 240}
 DETAILS_SCHEMA = {
     "type": "object",
@@ -91,13 +109,15 @@ def tools() -> list[dict[str, Any]]:
         (
             "start_progress",
             "创建开发进度卡片",
-            "Start and display a new development task's progress before implementation. Use concise agent-declared steps; never send prompts, code, commands, credentials or raw logs.",
+            "Start and display development progress. Declare execution_mode L1/L2/L3 once selected, method_progress for selected SDD/TDD/coordination phases, and details.current for the concrete action. Never infer phases from skill loads or send raw prompts, code, commands or logs.",
             schema(
                 {
                     "title": {"type": "string", "minLength": 1, "maxLength": 80},
                     "steps": STEP_SCHEMA,
                     "summary": SUMMARY_SCHEMA,
                     "details": DETAILS_SCHEMA,
+                    "execution_mode": MODE_SCHEMA,
+                    "method_progress": METHOD_PROGRESS_SCHEMA,
                 },
                 ["title", "steps"],
             ),
@@ -108,7 +128,7 @@ def tools() -> list[dict[str, Any]]:
         (
             "update_progress",
             "更新开发进度",
-            "Update the current task's real milestone or final result. Reuse its run_id and returned revision. Do not call per tool or invent percentages. A revision conflict returns the current scoped snapshot.",
+            "Update a real milestone using run_id and revision. Keep execution_mode independent of loaded workflow; replace method_progress when selected method phases advance. Omission preserves declarations; ending a task requires ending its method tracks explicitly. Never invent percentages. A revision conflict returns the scoped snapshot.",
             schema(
                 {
                     "run_id": ID_SCHEMA,
@@ -126,6 +146,8 @@ def tools() -> list[dict[str, Any]]:
                     "steps": STEP_SCHEMA,
                     "summary": SUMMARY_SCHEMA,
                     "details": DETAILS_SCHEMA,
+                    "execution_mode": MODE_SCHEMA,
+                    "method_progress": METHOD_PROGRESS_SCHEMA,
                 },
                 ["run_id", "expected_revision", "status", "steps"],
             ),
@@ -236,12 +258,18 @@ class ProgressServer:
                 arguments
             ):
                 raise ProgressError("invalid_arguments")
+            if "execution_mode" in arguments and arguments["execution_mode"] is None:
+                raise ProgressError("invalid_execution_mode")
+            if "method_progress" in arguments and arguments["method_progress"] is None:
+                raise ProgressError("invalid_method_progress")
             if name == "start_progress":
                 state = self.store.start(
                     arguments["title"],
                     arguments["steps"],
                     arguments.get("summary", ""),
                     arguments.get("details"),
+                    execution_mode=arguments.get("execution_mode"),
+                    declared_methods=arguments.get("method_progress"),
                 )
             elif name == "update_progress":
                 state = self.store.update(
@@ -251,6 +279,8 @@ class ProgressServer:
                     arguments["steps"],
                     arguments.get("summary", ""),
                     arguments.get("details"),
+                    execution_mode=arguments.get("execution_mode"),
+                    declared_methods=arguments.get("method_progress"),
                 )
             elif name == "load_progress_skill":
                 current = self.store.read(arguments["run_id"])
@@ -325,6 +355,9 @@ class ProgressServer:
                     "skills to deliver their instructions and record actual loads. Retain the run_id "
                     "and revision returned by either write tool. Prefer concise current/change/remaining "
                     "details and evidence-supported verification; never infer a test pass from task completion. "
+                    "Once routing is selected declare execution_mode L1/L2/L3. Keep SDD/TDD/coordination "
+                    "method_progress phases explicit and details.current concrete; skill loads never "
+                    "change the mode or prove method progress. Preserve mode across finishing. "
                     "Send only short agent-declared steps; never raw prompts, code, commands, "
                     "credentials or logs. Do not create panels for unrelated questions. "
                     "Unavailable progress must not block the requested development work."

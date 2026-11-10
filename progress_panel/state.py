@@ -28,6 +28,8 @@ VERIFICATION_STATUSES = {
     "skipped",
     "unavailable",
 }
+EXECUTION_MODES = {"L1", "L2", "L3"}
+METHODS = {"sdd", "tdd", "coordination"}
 
 
 @dataclass
@@ -101,6 +103,52 @@ def steps(value: object, status: str) -> list[dict[str, str]]:
 def timestamp() -> str:
     """Return server reception time, never an inferred execution timestamp."""
     return datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def validate_execution_mode(value: object) -> str | None:
+    """Mode is a routing declaration, never inferred from a loaded skill."""
+    if value is None:
+        return None
+    if not isinstance(value, str) or value not in EXECUTION_MODES:
+        raise ProgressError("invalid_execution_mode")
+    return value
+
+
+def method_progress(value: object) -> list[Snapshot]:
+    """Validate selected methods and their independently declared phase states."""
+    if value is None:
+        return []
+    if not isinstance(value, list) or len(value) > 3:
+        raise ProgressError("invalid_method_progress")
+    result: list[Snapshot] = []
+    for item in value:
+        if not isinstance(item, dict) or set(item) != {"method", "status", "phases"}:
+            raise ProgressError("invalid_method_progress")
+        name, status = item["method"], item["status"]
+        if not isinstance(name, str) or name not in METHODS:
+            raise ProgressError("invalid_method_progress")
+        if not isinstance(status, str) or status not in RUN_STATUSES:
+            raise ProgressError("invalid_method_progress")
+        phases = steps(item["phases"], status)
+        if len(phases) > 8:
+            raise ProgressError("invalid_method_progress")
+        for phase in phases:
+            text(phase["label"], 40)
+        result.append({"method": name, "status": status, "phases": phases,
+                       "source": "agent_declared"})
+    if len({item["method"] for item in result}) != len(result):
+        raise ProgressError("duplicate_methods")
+    return result
+
+
+def validate_method_end(progress: list[Snapshot], status: str) -> None:
+    """Ending a task never fabricates completion of its selected methods."""
+    if status in TERMINAL and any(
+        item["status"] not in TERMINAL
+        or (status == "completed" and item["status"] == "blocked")
+        for item in progress
+    ):
+        raise ProgressError("unfinished_methods")
 
 
 def details(value: object) -> Snapshot:
@@ -180,11 +228,13 @@ def stage_details(value: Snapshot, status: str) -> Snapshot:
 def stage_event(
     revision: int, at: str, status: str, summary: str,
     execution: Snapshot, declared_steps: list[dict[str, str]],
+    mode: str | None, methods: list[Snapshot],
 ) -> Snapshot:
     """Store the bounded declarations needed to read a past milestone."""
     event: Snapshot = {
         "revision": revision, "at": at, "status": status,
         "summary": summary, "details": execution,
+        "execution_mode": mode, "method_progress": methods,
     }
     current = next(
         (step["label"] for step in declared_steps if step["status"] in {"active", "blocked"}),
@@ -259,12 +309,15 @@ class ProgressStore:
         declared_steps: object,
         summary: object = "",
         execution: object = None,
+        *, execution_mode: object = None, declared_methods: object = None,
     ) -> Snapshot:
         """Start a new task; the returned random run ID scopes all later operations."""
         title = text(title, 80)
         summary = text(summary, 240, empty=True)
         declared_steps = steps(declared_steps, "running")
         execution = stage_details(details(execution) if execution is not None else {}, "running")
+        mode = validate_execution_mode(execution_mode)
+        methods = method_progress(declared_methods)
         now = timestamp()
         identifier = str(uuid.uuid4())
         snapshot: Snapshot = {
@@ -278,11 +331,13 @@ class ProgressStore:
             "summary": summary,
             "details": execution,
             "workflow": None,
+            "execution_mode": mode,
+            "method_progress": methods,
             "skill_loads": [],
             "created_at": now,
             "updated_at": now,
             "history": [
-                stage_event(1, now, "running", summary, execution, declared_steps)
+                stage_event(1, now, "running", summary, execution, declared_steps, mode, methods)
             ],
         }
         with self.connection() as connection:
@@ -308,6 +363,7 @@ class ProgressStore:
         declared_steps: object,
         summary: object = "",
         execution: object = None,
+        *, execution_mode: object = None, declared_methods: object = None,
     ) -> Snapshot:
         """Apply a declaration atomically; identical lost-response retries are safe."""
         identifier = run_id(identifier)
@@ -326,6 +382,10 @@ class ProgressStore:
                 else current.get("details", {}),
                 status,
             )
+            mode = (validate_execution_mode(execution_mode) if execution_mode is not None
+                    else current.get("execution_mode"))
+            methods = (method_progress(declared_methods) if declared_methods is not None
+                       else current.get("method_progress", []))
             if current["revision"] != expected_revision:
                 identical_retry = (
                     current["revision"] == expected_revision + 1
@@ -333,16 +393,22 @@ class ProgressStore:
                     and current["steps"] == declared_steps
                     and current["summary"] == summary
                     and current.get("details", {}) == execution
+                    and current.get("execution_mode") == mode
+                    and current.get("method_progress", []) == methods
                 )
                 if identical_retry:
                     return current
                 raise ProgressError("revision_conflict", current)
             if current["status"] in TERMINAL:
                 raise ProgressError("run_ended")
+            previous_mode = current.get("execution_mode")
+            if previous_mode and mode and abs(int(mode[-1]) - int(previous_mode[-1])) > 1:
+                raise ProgressError("invalid_mode_transition")
+            validate_method_end(methods, status)
             now = timestamp()
             revision = expected_revision + 1
             history = current["history"] + [
-                stage_event(revision, now, status, summary, execution, declared_steps)
+                stage_event(revision, now, status, summary, execution, declared_steps, mode, methods)
             ]
             updated = dict(
                 current,
@@ -351,6 +417,8 @@ class ProgressStore:
                 steps=declared_steps,
                 summary=summary,
                 details=execution,
+                execution_mode=mode,
+                method_progress=methods,
                 updated_at=now,
                 history=history[-MAX_HISTORY:],
             )
@@ -408,6 +476,8 @@ class ProgressStore:
                 "skill": name,
                 "source": "mcp_skill_load",
                 "summary": "",
+                "execution_mode": current.get("execution_mode"),
+                "method_progress": current.get("method_progress", []),
             }
             updated = dict(
                 current,

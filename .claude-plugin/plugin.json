@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "relayforge-development",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "description": "Reusable software development workflows for RelayForge projects.",
   "author": {
     "name": "RelayForge"

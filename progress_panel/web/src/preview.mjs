@@ -25,9 +25,6 @@ function render() {
   // Isolate disclosure state between examples while reusing the production renderer.
   const exampleId = String(Object.keys(previewScenarios).indexOf(state.scenario) + 1).padStart(12, '0');
   panel.render({...scenario.snapshot, run_id: `00000000-0000-4000-8000-${exampleId}`});
-  // Keep the work-step styling visible for this feedback round; the real card still starts compact.
-  const records = card.querySelector('[data-ui="details"]');
-  if (records.getAttribute('aria-expanded') !== 'true') records.click();
   syncPreview();
 }
 function syncPreview() {

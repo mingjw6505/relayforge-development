@@ -46,6 +46,59 @@ or reconfigure the host just to populate the card.
 
 ## Meaningful updates
 
+### Mode, method progress and concrete action
+
+After routing is actually selected, declare top-level `execution_mode` as `L1`,
+`L2` or `L3`. The card displays Quick/L1, Standard/L2 or Large/L3. Preserve it
+across workflow loads and finishing; it is not a Skill name. Mode changes are
+adjacent and retain completed work/history. Keep the reason in task context.
+Omit the field only while no mode has been selected or the tool lacks support.
+
+Declare `method_progress` only for methods actually selected: `sdd`, `tdd` or
+`coordination` (dependency coordination, not proof of subagents). Up to three
+unique tracks are accepted, each with `method`, `status` and `phases`. Track
+status uses the run-status enums; phases use `{label, status}` step entries,
+at most eight unique single-line labels of at most 40 characters. Every running
+or waiting track has one active phase. Completed tracks have only done/skipped
+phases. Do not send a `source` field; the server marks declarations.
+
+Keep three levels separate: execution mode, method phase, concrete action in
+`details.current`. For example, Standard/L2 + SDD/specification phase +
+"正在生成规格文档". An implementation phase can additionally show a real TDD
+red/green/refactor cycle. `steps` remains the concrete task checklist, not an
+implicit replacement for method progress. Stage names follow actual scope;
+selecting SDD does not require a separate specification file or plan where the
+existing workflow permits conversation-based requirements. Say "规格文档" only
+when a document is actually being produced. Do not add review, tickets, handoff,
+commit or push phases merely to fill the track.
+
+```json
+{
+  "execution_mode": "L2",
+  "method_progress": [{
+    "method": "sdd",
+    "status": "running",
+    "phases": [
+      {"label": "规格文档", "status": "active"},
+      {"label": "实施计划", "status": "pending"},
+      {"label": "实现与验证", "status": "pending"}
+    ]
+  }],
+  "details": {"current": "正在生成规格文档"}
+}
+```
+
+Both start/update accept these optional fields. Omission preserves existing
+mode/tracks; `method_progress` replaces the whole selected list, and `[]` removes
+it after a real scope change. Advance phases at actual milestones, never because
+a Skill was loaded. Before ending the task, explicitly end remaining tracks:
+completed only for finished scope, blocked for a blocked attempt, cancelled for
+a discontinued method. Task completion rejects blocked or still-running tracks;
+it never auto-completes them or implies tests passed. Unknown legacy mode stays
+"未申报" and absent tracks stay absent. If these arguments are unavailable,
+continue with the concise text fallback; do not send unsupported fields or
+modify the installed host to populate the card.
+
 `update_progress` requires the existing run ID, last revision, actual run status
 and full step list. Optional `details` replaces the details object; omission keeps
 the applicable previous declaration. Include short concrete changes and remaining work.

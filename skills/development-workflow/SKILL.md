@@ -19,6 +19,14 @@ adds durable dependency coordination. A primary agent can coordinate sequentiall
 Multiple sessions alone do not select L3. Quick/L1 stays inline with the same
 evidence principles and finishing, without loading this whole workflow.
 
+Keep the selected `execution_mode` visible through the
+[progress contract](../task-router/references/progress-panel.md#mode-method-progress-and-concrete-action).
+For selected SDD, declare actual specification/planning/implementation/check phases;
+update `details.current` with work such as generating a specification. Add a TDD
+cycle only when used, or dependency coordination when selected. Track transitions
+follow actual work, not instruction loads; no extra documents or phases are
+required merely for the display. Preserve mode and tracks across resumes.
+
 ## Minimal SDD and adjustments
 
 Maintain three logical areas: Spec (outcome, scope, behavior, boundaries and

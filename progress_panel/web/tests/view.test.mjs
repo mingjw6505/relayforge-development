@@ -57,3 +57,31 @@ test('history uses recorded details and never invents missing legacy information
   assert.equal(historyView({status:'running',summary:''}).evidence,'');
   assert.equal(historyView({status:'blocked',summary:'等待恢复',details:{reason:'缺少验收环境'}}).reason,'缺少验收环境');
 });
+
+test('mode and selected method phases are distinct from loaded workflow and task steps',()=>{
+  const snapshot={...base,execution_mode:'L2',workflow:'finishing-development',skill_loads:[receipt('finishing-development','workflow')],details:{current:'正在生成规格文档'},method_progress:[{
+    method:'sdd',status:'running',source:'agent_declared',phases:[{label:'范围确认',status:'done'},{label:'规格文档',status:'active'},{label:'实施计划',status:'pending'}],
+  }]};
+  const view=cardView(snapshot);
+  assert.equal(view.mode,'Standard / L2');
+  assert.equal(view.current,'正在生成规格文档');
+  assert.equal(view.methods[0].title,'SDD · 规格驱动');
+  assert.equal(view.methods[0].current,'规格文档 · 进行中');
+  assert.equal(view.methods[0].done,1);
+  assert.equal(view.methods[0].total,3);
+  assert.equal(view.workflow,'finishing-development');
+  assert.equal(cardView({...base,execution_mode:'L1'}).mode,'Quick / L1');
+  assert.equal(cardView({...base,execution_mode:'L3'}).mode,'Large / L3');
+});
+
+test('unknown declarations stay unknown and method completion does not imply tests passed',()=>{
+  const old=cardView({...base,workflow:'development-workflow',skill_loads:[receipt('development-workflow','workflow')]});
+  assert.equal(old.mode,'未申报');
+  assert.equal(cardView({...base,execution_mode:'toString'}).modeDescription,'');
+  assert.deepEqual(old.methods,[]);
+  const view=cardView({...base,status:'completed',execution_mode:'L2',method_progress:[{method:'sdd',status:'completed',source:'agent_declared',phases:[{label:'规格',status:'done'},{label:'发布',status:'skipped'}]}]});
+  assert.equal(view.methods[0].current,'已完成');
+  assert.equal(view.methods[0].skipped,1);
+  assert.equal(view.verification[0].text,'未执行');
+  assert.deepEqual(cardView({...base,method_progress:[{method:'sdd',source:'planned',phases:[]}]}).methods,[]);
+});
