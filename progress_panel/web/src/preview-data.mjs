@@ -38,6 +38,19 @@ const ended = steps.map(step => ({...step, status: 'done'}));
 const implementationSteps = [{label: '编写失败用例', status: 'done'}, {label: '实现重试逻辑', status: 'active'}, {label: '整理代码并验证', status: 'pending'}];
 const verificationSteps = [{label: '规格与实现', status: 'done'}, {label: '回归检查', status: 'active'}, {label: '收尾确认', status: 'pending'}];
 const scenarios = {
+  compact: {label: '紧凑卡片 · 默认示例', snapshot: {...base,
+    steps: [{label: '定位问题', status: 'done'}, {label: '修复实现', status: 'active'}, {label: '回归检查', status: 'pending'}, {label: '收尾', status: 'pending'}],
+    method_progress: [],
+    skill_loads: [...base.skill_loads,
+      {name: 'python-pro', kind: 'skill', source: 'mcp_skill_load', loaded_at: at(2), sha256: 'b'.repeat(64)},
+      {name: 'systematic-debugging', kind: 'skill', source: 'mcp_skill_load', loaded_at: at(2), sha256: 'c'.repeat(64)}],
+    details: {current: '正在补齐超时后的重试逻辑', change: '已定位超时后重复重试的原因', remaining: '补齐回归用例，检查超时与重复提交', verification: {status: 'not_run', evidence: '模拟数据：尚未进入回归检查，暂无验证结果', source: 'agent_declared'}},
+    history: [
+      {revision: 5, at: at(3), status: 'running', summary: '开始排查失败请求'},
+      {revision: 6, at: at(4), status: 'running', summary: '定位到重试次数异常的原因'},
+      {revision: 7, at: at(6), status: 'running', summary: '开始补齐超时后的重试逻辑'},
+    ],
+  }},
   running: {label: 'Standard / L2 · 生成规格', snapshot: base},
   quick: {label: 'Quick / L1 · 定位修复', snapshot: {...base, execution_mode: 'L1', method_progress: [], workflow: 'task-router', skill_loads: [], steps: [{label: '定位原因', status: 'active'}, {label: '修复与检查', status: 'pending'}], details: {current: '正在定位重试次数不正确的原因', remaining: '修复并运行针对性检查', verification}}},
   tdd: {label: 'Standard / L2 · SDD + TDD', snapshot: {...base, method_progress: [sdd(3), {method: 'tdd', status: 'running', source: 'agent_declared', phases: [{label: '编写失败用例', status: 'done'}, {label: '最小实现', status: 'active'}, {label: '重构', status: 'pending'}]}], details: {current: '正在实现让失败重试用例通过的最小改动', change: '规格与计划已确认，回归用例已观察到预期失败', remaining: '用例通过后整理重试逻辑', verification: {status: 'running', evidence: '模拟数据：当前 TDD 循环处于最小实现', source: 'agent_declared'}}}},
@@ -55,7 +68,7 @@ const scenarios = {
 };
 // Every variant is a coherent new declaration, with its own mode/phase history.
 export const previewScenarios = Object.fromEntries(Object.entries(scenarios).map(([name, scenario]) => {
-  if (name === 'legacy' || name === 'running') return [name, scenario];
+  if (['legacy', 'running', 'compact'].includes(name)) return [name, scenario];
   let selectedSteps = scenario.snapshot.steps;
   if (name === 'tdd') selectedSteps = implementationSteps;
   if (name === 'large') selectedSteps = [{label: '确认接口边界', status: 'done'}, {label: '推进后端交付', status: 'active'}, {label: '接入并集成', status: 'pending'}];

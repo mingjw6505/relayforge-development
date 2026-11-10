@@ -1,19 +1,18 @@
 .rf-progress {
   color-scheme: light dark;
-  --rf-card: light-dark(#f5f5f5, #2c2c2c);
+  --rf-card: light-dark(#fff, #252525);
   --rf-text: light-dark(#202020, #f2f2f2);
   --rf-secondary: light-dark(#626262, #b4b4b4);
   --rf-muted: light-dark(#707070, #a2a2a2);
-  --rf-line: light-dark(#dedede, #414141);
-  --rf-hover: light-dark(#e9e9e9, #353535);
-  --rf-pass: light-dark(#147746, #48ce8e);
+  --rf-line: light-dark(#e1e3e7, #414141);
+  --rf-hover: light-dark(#f0f1f3, #353535);
+  --rf-pass: light-dark(#168249, #48ce8e);
   --rf-fail: light-dark(#b52d36, #ff8589);
-  --rf-active: light-dark(#175abd, #8ebdff);
-  --rf-active-bg: light-dark(#e6effc, #27384e);
-  --rf-done-bg: light-dark(#e0f0e6, #254336);
-  --rf-blocked-bg: light-dark(#fbe5e6, #512f34);
+  --rf-active: light-dark(#2563eb, #8ebdff);
+  --rf-active-bg: light-dark(#eaf1ff, #27384e);
+  --rf-blocked-bg: light-dark(#fff0f0, #512f34);
   color: var(--rf-text);
-  font: 13px/1.6 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  font: 12px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 .rf-progress[data-theme="light"] {color-scheme: light}
@@ -21,93 +20,99 @@
 .rf-progress *, .rf-progress *::before, .rf-progress *::after {box-sizing: border-box}
 .rf-progress [hidden] {display: none !important}
 .rf-progress button {font: inherit; color: inherit; cursor: pointer}
-.rf-progress button:focus-visible, .rf-progress summary:focus-visible {outline: 2px solid var(--rf-secondary); outline-offset: 3px}
+.rf-progress button:focus-visible, .rf-progress summary:focus-visible, .rf-progress .rf-steps:focus-visible {outline: 2px solid var(--rf-active); outline-offset: 3px}
 .rf-progress button:disabled {opacity: .6; cursor: default}
-.rf-progress .rf-card {border: 1px solid var(--rf-line); border-radius: 18px; background: var(--rf-card); padding: 17px 20px 0; max-width: 640px; overflow-wrap: anywhere}
-.rf-progress .rf-top {display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 14px}
-.rf-progress .rf-brand {font-size: 11px; color: var(--rf-secondary); letter-spacing: .02em}
-.rf-progress .rf-status {font-size: 11px; color: var(--rf-secondary); display: inline-flex; align-items: center; gap: 6px}
+.rf-progress .rf-card {border: 1px solid var(--rf-line); border-radius: 14px; background: var(--rf-card); padding: 12px 16px 0; max-width: 640px; overflow-wrap: anywhere; box-shadow: 0 2px 7px #00000005}
+.rf-progress .rf-top {display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 4px 10px; font-size: 11px; color: var(--rf-secondary)}
+.rf-progress .rf-status {display: inline-flex; align-items: center; gap: 5px; color: var(--rf-active)}
 .rf-progress .rf-status::before {content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; flex: none}
 .rf-progress[data-status="blocked"] .rf-status {color: var(--rf-fail)}
-.rf-progress h1 {margin: 12px 0 3px; font-size: 16px; line-height: 1.5; font-weight: 600}
-.rf-progress .rf-mode-row {display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin: 13px 0 9px; font-size: 11px}
-.rf-progress .rf-mode-label, .rf-progress .rf-mode-description {color: var(--rf-muted)}
-.rf-progress .rf-mode-badge {background: var(--rf-hover); color: var(--rf-text); padding: 3px 9px; border-radius: 5px; font-weight: 500}
-.rf-progress .rf-phase {font-size: 11px; color: var(--rf-muted); margin: 0}
-.rf-progress .rf-methods {display: grid; gap: 15px; margin: 1px 0 2px; padding: 12px 0; border-top: 1px solid var(--rf-line); border-bottom: 1px solid var(--rf-line)}
-.rf-progress .rf-method-heading {display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 5px 12px; margin-bottom: 9px; font-size: 12px}
-.rf-progress .rf-method-name {font-weight: 500; color: var(--rf-text)}
-.rf-progress .rf-method-current {color: var(--rf-secondary); font-size: 11px}
-.rf-progress .rf-method-phases {display: flex; flex-wrap: wrap; gap: 7px 8px}
-.rf-progress .rf-method-phase {display: inline-flex; gap: 6px; align-items: flex-start; padding: 5px 8px; color: var(--rf-muted); font-size: 11px; border-radius: 6px; max-width: 100%; min-width: 0}
-.rf-progress .rf-phase-mark {width: 13px; height: 13px; border: 1px solid currentColor; border-radius: 50%; display: grid; place-items: center; margin-top: 2px; flex: none; font-size: 10px; line-height: 1}
-.rf-progress .rf-phase-done {color: var(--rf-pass)}
-.rf-progress .rf-phase-active {color: var(--rf-active); background: var(--rf-active-bg)}
-.rf-progress .rf-phase-active .rf-phase-mark::after {content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor}
-.rf-progress .rf-phase-blocked {color: var(--rf-fail); background: var(--rf-blocked-bg)}
-.rf-progress .rf-phase-skipped .rf-phase-mark {border-style: dashed}
-.rf-progress .rf-method-count {font-size: 11px; color: var(--rf-muted); margin: 7px 0 0}
-.rf-progress .rf-work {display: grid; gap: 12px; margin-top: 18px}
-.rf-progress .rf-row, .rf-progress .rf-next {display: flex; align-items: baseline; gap: 12px; min-width: 0}
-.rf-progress .rf-label {width: 42px; flex: 0 0 42px; font-size: 12px; color: var(--rf-secondary)}
+.rf-progress[data-status="completed"] .rf-status {color: var(--rf-pass)}
+.rf-progress[data-status="cancelled"] .rf-status {color: var(--rf-muted)}
+.rf-progress h1 {margin: 7px 0 10px; font-size: 16px; line-height: 1.4; font-weight: 600}
+.rf-progress ol {list-style: none; padding: 0; margin: 0}
+.rf-progress .rf-steps {display: grid; grid-auto-flow: column; grid-auto-columns: minmax(76px, 1fr); overflow-x: auto; padding: 3px 0 4px; margin-bottom: 9px; scrollbar-width: thin}
+.rf-progress .rf-steps li {position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 0; text-align: center; color: var(--rf-muted); font-size: 11px}
+.rf-progress .rf-steps li::before {content: ""; position: absolute; height: 2px; background: var(--rf-line); top: 7px; right: 50%; width: 100%}
+.rf-progress .rf-steps li:first-child::before {display: none}
+.rf-progress .rf-steps li[data-connected="true"]::before {background: var(--rf-pass)}
+.rf-progress .rf-step-icon {position: relative; z-index: 1; display: grid; place-items: center; width: 16px; height: 16px; border: 1.5px solid var(--rf-muted); border-radius: 50%; background: var(--rf-card); font-size: 11px; line-height: 1; flex: none}
+.rf-progress .rf-step-label {position: relative; max-width: 100%; padding: 1px 5px; border-radius: 4px}
+.rf-progress .rf-step-done .rf-step-icon {color: var(--rf-card); background: var(--rf-pass); border-color: var(--rf-pass)}
+.rf-progress .rf-step-done .rf-step-label {color: var(--rf-text)}
+.rf-progress .rf-step-active .rf-step-icon {color: var(--rf-active); border-color: var(--rf-active); border-width: 2px}
+.rf-progress .rf-step-active .rf-step-icon::after {content: ""; width: 7px; height: 7px; background: currentColor; border-radius: 50%}
+.rf-progress .rf-step-active .rf-step-label {color: var(--rf-active); background: var(--rf-active-bg); font-weight: 500}
+.rf-progress .rf-step-blocked .rf-step-icon, .rf-progress .rf-step-blocked .rf-step-label {color: var(--rf-fail); border-color: var(--rf-fail)}
+.rf-progress .rf-step-skipped .rf-step-icon {border-style: dashed}
+.rf-progress .rf-row {display: flex; align-items: baseline; gap: 10px; min-width: 0}
+.rf-progress .rf-label {width: 46px; flex: 0 0 46px; color: var(--rf-secondary)}
 .rf-progress .rf-value {min-width: 0}
+.rf-progress .rf-current {margin-bottom: 10px}
 .rf-progress .rf-current .rf-value {font-weight: 500}
-.rf-progress .rf-change .rf-value {color: var(--rf-secondary)}
-.rf-progress .rf-verification {display: flex; flex-wrap: wrap; gap: 5px 12px; font-size: 12px; min-width: 0}
+.rf-progress .rf-meta {display: grid; gap: 5px; padding: 9px 0; margin: 0; border-top: 1px solid var(--rf-line)}
+.rf-progress .rf-meta > div {display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 10px; align-items: baseline}
+.rf-progress .rf-meta dt {color: var(--rf-secondary)}
+.rf-progress .rf-meta dd {margin: 0; min-width: 0}
+.rf-progress .rf-code {font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px}
+.rf-progress .rf-mode-badge {display: inline-block; padding: 1px 7px; border-radius: 4px; background: var(--rf-hover); font-size: 11px}
+.rf-progress .rf-footer {display: flex; justify-content: flex-end; border-top: 1px solid var(--rf-line); padding: 5px 0 6px}
+.rf-progress .rf-text-button {border: 0; background: transparent; padding: 3px 0; font-size: 11px; color: var(--rf-secondary); display: inline-flex; align-items: center; gap: 6px}
+.rf-progress .rf-text-button:hover {color: var(--rf-active)}
+.rf-progress .rf-chevron {font-size: 14px; line-height: 1}
+.rf-progress [aria-expanded="true"] .rf-chevron {transform: rotate(180deg)}
+.rf-progress .rf-records {border-top: 1px solid var(--rf-line); padding-bottom: 10px}
+.rf-progress .rf-detail-section {display: grid; gap: 6px; padding: 10px 0; border-bottom: 1px solid var(--rf-line)}
+.rf-progress h2 {font-size: 12px; line-height: 1.5; font-weight: 600; color: var(--rf-text); margin: 0 0 2px}
+.rf-progress .rf-verification {display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11px}
+.rf-progress .rf-verification > span {padding: 1px 6px; background: var(--rf-hover); border-radius: 4px}
 .rf-progress .rf-verification-passed {color: var(--rf-pass)}
 .rf-progress .rf-verification-failed {color: var(--rf-fail)}
 .rf-progress .rf-verification-not_run, .rf-progress .rf-verification-pending, .rf-progress .rf-verification-skipped, .rf-progress .rf-verification-unavailable {color: var(--rf-muted)}
-.rf-progress .rf-stale {font-size: 11px; color: var(--rf-muted); margin: 14px 0 0}
-.rf-progress .rf-next {border-top: 1px solid var(--rf-line); margin-top: 17px; padding-top: 13px; font-size: 12px; color: var(--rf-secondary)}
-.rf-progress .rf-footer {display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding: 12px 0 13px; font-size: 11px; color: var(--rf-muted)}
-.rf-progress .rf-text-button {border: 0; background: transparent; padding: 3px 0; font-size: 11px; color: var(--rf-secondary); display: inline-flex; gap: 6px; align-items: center}
-.rf-progress .rf-chevron {font-size: 14px; line-height: 1}
-.rf-progress [aria-expanded="true"] .rf-chevron {transform: rotate(180deg)}
-.rf-progress .rf-records {border-top: 1px solid var(--rf-line); padding: 15px 0 17px; font-size: 12px; color: var(--rf-secondary)}
-.rf-progress .rf-records h2 {font-size: 12px; font-weight: 500; color: var(--rf-text); margin: 18px 0 9px}
-.rf-progress .rf-records > h2:first-child {margin-top: 0}
-.rf-progress ol {list-style: none; padding: 0; margin: 0}
-.rf-progress .rf-steps {display: grid; gap: 5px}
-.rf-progress .rf-steps li {display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: start; gap: 10px; padding: 9px 10px; min-width: 0; border-radius: 9px}
-.rf-progress .rf-step-label {align-self: center; min-width: 0; color: var(--rf-text)}
-.rf-progress .rf-step-icon {display: grid; place-items: center; width: 20px; height: 20px; margin-top: 1px; border: 1.5px solid var(--rf-muted); border-radius: 50%; color: var(--rf-muted); font-size: 12px; line-height: 1; font-weight: 600}
-.rf-progress .rf-step-status {align-self: center; padding: 2px 8px; border-radius: 5px; color: var(--rf-secondary); background: var(--rf-hover); font-size: 11px; white-space: nowrap; line-height: 1.6}
-.rf-progress .rf-step-done .rf-step-icon, .rf-progress .rf-step-done .rf-step-status {color: var(--rf-pass); background: var(--rf-done-bg); border-color: transparent}
-.rf-progress .rf-step-active {background: var(--rf-active-bg)}
-.rf-progress .rf-step-active .rf-step-label {font-weight: 500}
-.rf-progress .rf-step-active .rf-step-icon {color: var(--rf-active); border-color: var(--rf-active); border-width: 2px}
-.rf-progress .rf-step-active .rf-step-icon::after {content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor}
-.rf-progress .rf-step-active .rf-step-status {color: var(--rf-active); background: var(--rf-card); font-weight: 500}
-.rf-progress .rf-step-pending .rf-step-label, .rf-progress .rf-step-skipped .rf-step-label {color: var(--rf-secondary)}
-.rf-progress .rf-step-blocked .rf-step-icon, .rf-progress .rf-step-blocked .rf-step-status {color: var(--rf-fail); background: var(--rf-blocked-bg); border-color: transparent}
-.rf-progress .rf-step-skipped .rf-step-icon {border-style: dashed}
-.rf-progress .rf-loads li {display: flex; gap: 12px; padding: 4px 0; min-width: 0}
-.rf-progress .rf-record-heading {display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 6px 12px; margin-top: 18px}
-.rf-progress .rf-record-heading h2 {margin: 0 0 9px}
-.rf-progress .rf-record-heading > span {font-size: 11px; color: var(--rf-muted)}
-.rf-progress .rf-history > li {padding: 8px 0; border-bottom: 1px solid var(--rf-line)}
-.rf-progress .rf-history > li:last-child {border: 0}
-.rf-progress .rf-history summary {cursor: pointer; display: flex; align-items: baseline; gap: 10px; list-style: none}
+.rf-progress .rf-evidence {margin: 0; color: var(--rf-secondary); font-size: 11px}
+.rf-progress .rf-record-heading {display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 10px}
+.rf-progress .rf-record-heading > span {font-size: 10px; color: var(--rf-muted)}
+.rf-progress .rf-history {display: grid; gap: 7px}
+.rf-progress .rf-history summary {cursor: pointer; display: flex; align-items: baseline; gap: 8px; list-style: none}
 .rf-progress .rf-history summary::-webkit-details-marker {display: none}
-.rf-progress .rf-history summary::after {content: "+"; font-size: 11px; margin-left: auto; color: var(--rf-muted); flex: none}
+.rf-progress .rf-history summary::before {content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--rf-muted); flex: none; align-self: center}
+.rf-progress .rf-history summary::after {content: "+"; font-size: 10px; margin-left: auto; color: var(--rf-muted); flex: none}
 .rf-progress .rf-history details[open] > summary::after {content: "−"}
-.rf-progress time {font-size: 11px; font-variant-numeric: tabular-nums; color: var(--rf-muted); white-space: nowrap; flex: none}
-.rf-progress .rf-history-body {margin: 8px 0 3px; padding-left: 8px; border-left: 2px solid var(--rf-line); font-size: 11px}
-.rf-progress .rf-history-body p {margin: 5px 0}
-.rf-progress .rf-more {margin-top: 9px}
-.rf-progress .rf-evidence, .rf-progress .rf-workflow {margin: 0}
-.rf-progress .rf-loads li {align-items: baseline; flex-wrap: wrap; gap: 4px 10px; font-size: 11px}
-.rf-progress .rf-load-name {color: var(--rf-text)}
-.rf-progress .rf-source {border-top: 1px solid var(--rf-line); margin: 17px 0 12px; padding-top: 12px; font-size: 11px; color: var(--rf-muted)}
-.rf-progress .rf-control-button {border: 1px solid var(--rf-line); border-radius: 7px; background: transparent; padding: 5px 9px; font-size: 11px}
-.rf-progress .rf-control-button:hover {background: var(--rf-hover)}
-.rf-progress .rf-empty, .rf-progress .rf-notice {margin: 8px 4px; font-size: 12px; color: var(--rf-secondary)}
+.rf-progress time {font-size: 10px; font-variant-numeric: tabular-nums; color: var(--rf-muted); white-space: nowrap; flex: none}
+.rf-progress .rf-history-body {margin: 5px 0 0 10px; padding-left: 8px; border-left: 2px solid var(--rf-line); font-size: 11px; color: var(--rf-secondary)}
+.rf-progress .rf-history-body p {margin: 4px 0}
+.rf-progress .rf-more {justify-self: start; color: var(--rf-active)}
+.rf-progress .rf-disclosure {border-bottom: 1px solid var(--rf-line); padding: 9px 0}
+.rf-progress .rf-disclosure > summary {cursor: pointer; list-style: none; display: flex; align-items: baseline; justify-content: space-between; gap: 10px}
+.rf-progress .rf-disclosure > summary::-webkit-details-marker {display: none}
+.rf-progress .rf-disclosure > summary::after {content: "⌄"; color: var(--rf-secondary)}
+.rf-progress .rf-disclosure[open] > summary::after {transform: rotate(180deg)}
+.rf-progress .rf-methods {display: grid; gap: 9px; padding-top: 8px}
+.rf-progress .rf-method-heading {display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; margin-bottom: 5px; font-size: 11px}
+.rf-progress .rf-method-current {color: var(--rf-secondary)}
+.rf-progress .rf-method-phases {display: flex; flex-wrap: wrap; gap: 4px}
+.rf-progress .rf-method-phase {display: inline-flex; align-items: baseline; gap: 4px; padding: 2px 5px; border-radius: 4px; color: var(--rf-muted); font-size: 11px; max-width: 100%}
+.rf-progress .rf-phase-mark {width: 12px; height: 12px; border: 1px solid currentColor; border-radius: 50%; display: inline-grid; place-items: center; flex: none; font-size: 9px; line-height: 1}
+.rf-progress .rf-phase-done {color: var(--rf-pass)}
+.rf-progress .rf-phase-active {color: var(--rf-active); background: var(--rf-active-bg)}
+.rf-progress .rf-phase-active .rf-phase-mark::after {content: ""; width: 4px; height: 4px; border-radius: 50%; background: currentColor}
+.rf-progress .rf-phase-blocked {color: var(--rf-fail); background: var(--rf-blocked-bg)}
+.rf-progress .rf-phase-skipped .rf-phase-mark {border-style: dashed}
+.rf-progress .rf-method-count {font-size: 10px; color: var(--rf-muted); margin: 4px 0 0}
+.rf-progress .rf-loads {display: grid; gap: 4px; padding-top: 7px}
+.rf-progress .rf-loads li {display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 8px; font-size: 10px; color: var(--rf-secondary)}
+.rf-progress .rf-load-name {color: var(--rf-text); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
+.rf-progress .rf-source {margin: 9px 0 5px; font-size: 10px; color: var(--rf-muted)}
+.rf-progress .rf-settings {display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 10px; font-size: 10px; color: var(--rf-muted)}
+.rf-progress .rf-attention {margin: 0 0 9px; padding: 5px 8px; border-radius: 5px; color: var(--rf-fail); background: var(--rf-blocked-bg); font-size: 11px}
+.rf-progress .rf-stale {font-size: 10px; color: var(--rf-muted); margin: 0 0 7px}
+.rf-progress .rf-empty, .rf-progress .rf-notice {margin: 7px 4px; font-size: 11px; color: var(--rf-secondary)}
 @media (max-width: 480px) {
-  .rf-progress .rf-card {padding: 15px 16px 0}
-  .rf-progress .rf-row, .rf-progress .rf-next {gap: 9px}
-  .rf-progress .rf-label {width: 38px; flex-basis: 38px}
-  .rf-progress .rf-loads li {display: grid; grid-template-columns: 1fr; gap: 3px}
+  .rf-progress .rf-card {padding: 11px 12px 0}
+  .rf-progress .rf-meta > div {grid-template-columns: 78px minmax(0, 1fr); gap: 8px}
+  .rf-progress .rf-row {gap: 8px}
+  .rf-progress .rf-steps {grid-auto-columns: minmax(68px, 1fr)}
 }
 @media (pointer: coarse) {
-  .rf-progress button, .rf-progress .rf-history summary {min-height: 44px}
+  .rf-progress button, .rf-progress summary {min-height: 44px}
 }

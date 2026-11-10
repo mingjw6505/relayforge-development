@@ -110,13 +110,17 @@ export function cardView(snapshot) {
     status = '验证中';
   }
   const change = info.change || snapshot.summary || '';
-  const index = currentStep ? snapshot.steps.indexOf(currentStep) : -1;
+  const verificationState = info.verification?.source === 'agent_declared' ? info.verification.status : 'not_run';
+  const attention = ['failed', 'partial', 'unavailable'].includes(verificationState)
+    || (snapshot.status === 'completed' && verificationState !== 'passed')
+    ? `验证：${verification.items.map(item => item.text).join(' · ')}` : '';
   return {
     ...executionView(snapshot),
     title: snapshot.title, status, currentLabel, current,
-    phase: index >= 0 ? `任务步骤 ${index + 1} / ${snapshot.steps.length} · ${currentStep.label}` : '',
+    attention,
     change: change === current ? '' : change,
     remaining, workflow, receipts, skills: receipts.filter(item => item.kind === 'skill'),
-    verification: verification.items, evidence: verification.evidence || '未提供验证依据',
+    verification: verification.items,
+    evidence: verification.evidence || (verificationState === 'not_run' ? '尚未申报验证结果。' : '未提供验证依据'),
   };
 }

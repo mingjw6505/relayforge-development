@@ -4,7 +4,7 @@ import {previewScenarios} from './preview-data.mjs';
 const root = document.getElementById('relayforge-progress-preview');
 const card = root.querySelector('#rf-preview-card');
 const picker = root.querySelector('#rf-preview-scenario');
-const state = {scenario: 'running', appearance: 'auto'};
+const state = {scenario: 'compact', appearance: 'auto'};
 let paused = false;
 const panel = createPanel(card, {onPauseToggle: () => {
   paused = !paused;
@@ -17,7 +17,7 @@ for (const [value, scenario] of Object.entries(previewScenarios)) {
   picker.append(option);
 }
 function render() {
-  if (!Object.hasOwn(previewScenarios, state.scenario)) state.scenario = 'running';
+  if (!Object.hasOwn(previewScenarios, state.scenario)) state.scenario = 'compact';
   picker.value = state.scenario;
   if (state.appearance === 'auto') delete card.dataset.theme;
   else card.dataset.theme = state.appearance;

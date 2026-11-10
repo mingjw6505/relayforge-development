@@ -31,7 +31,7 @@ export function createPanel(root, {onPauseToggle = () => {}} = {}) {
   function renderHistory() {
     const history = latest.history ?? [];
     const opened = new Set([...el('history').querySelectorAll('details[open]')].map(item => item.dataset.revision));
-    const selected = (allHistory ? history : history.slice(-6)).slice().reverse();
+    const selected = (allHistory ? history : history.slice(-3)).slice().reverse();
     el('history').replaceChildren(...selected.map(event => {
       const view = historyView(event);
       const item = document.createElement('li');
@@ -58,8 +58,8 @@ export function createPanel(root, {onPauseToggle = () => {}} = {}) {
       return item;
     }));
     el('history-count').textContent = `保留 ${history.length} 条`;
-    el('more-history').hidden = history.length <= 6;
-    el('more-history').textContent = allHistory ? '仅显示最近 6 条' : `展开全部 ${history.length} 条`;
+    el('more-history').hidden = history.length <= 3;
+    el('more-history').textContent = allHistory ? '仅显示最近 3 条' : `查看全部 ${history.length} 条记录`;
     el('more-history').setAttribute('aria-expanded', String(allHistory));
   }
 
@@ -70,7 +70,7 @@ export function createPanel(root, {onPauseToggle = () => {}} = {}) {
   }
 
   function renderMethods(methods) {
-    el('methods').hidden = methods.length === 0;
+    el('method-section').hidden = methods.length === 0;
     el('methods').replaceChildren(...methods.map(method => {
       const track = node('div', '', 'rf-method-track');
       track.dataset.method = method.key;
@@ -109,10 +109,14 @@ export function createPanel(root, {onPauseToggle = () => {}} = {}) {
 
   function render(snapshot) {
     const differentTask = latest?.run_id !== snapshot.run_id;
+    const previousStep = latest?.steps.findIndex(step => ['active', 'blocked'].includes(step.status));
     if (differentTask) {
       allHistory = false;
       el('records').hidden = true;
       el('details').setAttribute('aria-expanded', 'false');
+      el('details-label').textContent = '查看详情';
+      el('method-section').open = false;
+      el('load-section').open = false;
       el('history').replaceChildren();
     }
     latest = snapshot;
@@ -120,26 +124,39 @@ export function createPanel(root, {onPauseToggle = () => {}} = {}) {
     el('empty').hidden = true;
     el('task').hidden = false;
     root.dataset.status = snapshot.status;
-    for (const key of ['title', 'status', 'current', 'change', 'remaining', 'phase', 'workflow']) el(key).textContent = view[key];
+    for (const key of ['title', 'status', 'current', 'remaining', 'workflow']) el(key).textContent = view[key];
+    el('change').textContent = view.change || '暂无新进展申报';
     el('mode').textContent = view.mode;
-    el('mode-description').textContent = view.modeDescription;
-    el('mode-description').hidden = !view.modeDescription;
+    el('mode').title = view.modeDescription;
+    el('skills').textContent = view.skills.length ? view.skills.map(skill => skill.name).join(' · ') : '未记录';
     renderMethods(view.methods);
     el('current-label').textContent = view.currentLabel;
-    el('phase').hidden = !view.phase;
-    el('change-row').hidden = !view.change;
+    el('attention').textContent = view.attention;
+    el('attention').hidden = !view.attention;
     el('remaining-label').textContent = terminal(snapshot.status) ? '剩余' : '下一步';
     el('verification').replaceChildren(...view.verification.map(item => node('span', item.text, `rf-verification-${item.kind}`)));
     el('evidence').textContent = view.evidence;
-    el('steps').replaceChildren(...snapshot.steps.map(step => {
+    const scrollLeft = differentTask ? 0 : el('steps').scrollLeft;
+    el('steps').replaceChildren(...snapshot.steps.map((step, index) => {
       const item = node('li', '', `rf-step-${step.status}`);
+      item.dataset.connected = String(index > 0 && snapshot.steps[index - 1].status === 'done');
+      item.setAttribute('aria-label', `${step.label}：${stepNames[step.status]}`);
       const icon = node('span', stepIcons[step.status], 'rf-step-icon');
       icon.setAttribute('aria-hidden', 'true');
       if (step.status === 'active') item.setAttribute('aria-current', 'step');
-      item.append(icon, node('span', step.label, 'rf-step-label'), node('span', stepNames[step.status], 'rf-step-status'));
+      item.append(icon, node('span', step.label, 'rf-step-label'));
       return item;
     }));
+    el('steps').scrollLeft = scrollLeft;
+    const currentIndex = snapshot.steps.findIndex(step => ['active', 'blocked'].includes(step.status));
+    if (currentIndex >= 0 && (differentTask || currentIndex !== previousStep)) {
+      const steps = el('steps');
+      const current = steps.children[currentIndex];
+      steps.scrollLeft += current.getBoundingClientRect().left - steps.getBoundingClientRect().left
+        - (steps.clientWidth - current.clientWidth) / 2;
+    }
     el('load-section').hidden = view.receipts.length === 0;
+    el('load-heading').textContent = `工作流与 Skill 加载记录 · ${view.receipts.length} 项`;
     el('loads').replaceChildren(...view.receipts.map(receipt => {
       const item = document.createElement('li');
       item.append(node('time', time(receipt.loaded_at)), node('span', receipt.name, 'rf-load-name'),
@@ -147,7 +164,6 @@ export function createPanel(root, {onPauseToggle = () => {}} = {}) {
       return item;
     }));
     el('updated').textContent = `阶段申报 ${time(snapshot.updated_at)}`;
-    el('details').firstChild.textContent = view.receipts.length ? `查看记录 · ${view.receipts.length} 项加载` : '查看记录';
     renderHistory();
     syncControls();
     updateFreshness();
@@ -156,6 +172,7 @@ export function createPanel(root, {onPauseToggle = () => {}} = {}) {
   el('details').onclick = () => {
     const open = el('details').getAttribute('aria-expanded') !== 'true';
     el('details').setAttribute('aria-expanded', String(open));
+    el('details-label').textContent = open ? '收起详情' : '查看详情';
     el('records').hidden = !open;
   };
   el('more-history').onclick = () => {allHistory = !allHistory; renderHistory();};

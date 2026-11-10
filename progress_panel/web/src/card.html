@@ -2,26 +2,35 @@
 <article class="rf-card" data-ui="task" aria-label="开发进度" hidden>
   <header class="rf-top"><span class="rf-brand">RelayForge · 开发进度</span><span class="rf-status" data-ui="status" role="status"></span></header>
   <h1 data-ui="title"></h1>
-  <div class="rf-mode-row"><span class="rf-mode-label">开发模式</span><span class="rf-mode-badge" data-ui="mode"></span><span class="rf-mode-description" data-ui="mode-description"></span></div>
-  <p class="rf-phase" data-ui="phase"></p>
-  <div class="rf-work">
-    <div class="rf-row rf-current"><span class="rf-label" data-ui="current-label">当前</span><span class="rf-value" data-ui="current"></span></div>
-    <section class="rf-methods" data-ui="methods" aria-label="所选开发方法的阶段进度" hidden></section>
-    <div class="rf-row rf-change" data-ui="change-row"><span class="rf-label">进展</span><span class="rf-value" data-ui="change"></span></div>
-    <div class="rf-row"><span class="rf-label">验证</span><div class="rf-verification" data-ui="verification" aria-label="Agent 申报的验证结果"></div></div>
-  </div>
+  <ol class="rf-steps" data-ui="steps" aria-label="任务步骤，可横向滚动" tabindex="0"></ol>
+  <div class="rf-row rf-current"><span class="rf-label" data-ui="current-label">当前</span><span class="rf-value" data-ui="current"></span></div>
+  <p class="rf-attention" data-ui="attention" role="status" hidden></p>
+  <dl class="rf-meta">
+    <div><dt>开发模式</dt><dd><span class="rf-mode-badge" data-ui="mode"></span></dd></div>
+    <div><dt>当前工作流</dt><dd class="rf-code" data-ui="workflow"></dd></div>
+    <div><dt>已加载 Skill</dt><dd class="rf-code" data-ui="skills"></dd></div>
+  </dl>
   <p class="rf-stale" data-ui="stale" hidden>阶段暂无新申报；同步正常，长时间检查可能仍在进行。</p>
-  <div class="rf-next"><span class="rf-label" data-ui="remaining-label">下一步</span><span class="rf-value" data-ui="remaining"></span></div>
-  <footer class="rf-footer"><span data-ui="updated"></span><button class="rf-text-button" type="button" data-ui="details" aria-expanded="false" aria-controls="rf-records">查看记录<span class="rf-chevron" aria-hidden="true">⌄</span></button></footer>
-  <section class="rf-records" id="rf-records" data-ui="records" aria-label="阶段与加载记录" hidden>
-    <h2>工作步骤</h2><ol class="rf-steps" data-ui="steps"></ol>
-    <div class="rf-record-heading"><h2>阶段更新</h2><span data-ui="history-count"></span></div>
-    <ol class="rf-history" data-ui="history"></ol>
-    <button class="rf-text-button rf-more" type="button" data-ui="more-history" hidden>展开全部记录</button>
-    <h2>验证依据</h2><p class="rf-evidence" data-ui="evidence"></p>
-    <div data-ui="load-section" hidden><h2>工作流与 Skill 加载</h2><p class="rf-workflow">工作流：<span data-ui="workflow"></span></p><ol class="rf-loads" data-ui="loads"></ol></div>
-    <p class="rf-source">开发模式、方法阶段、步骤及验证由 Agent 申报。Skill 凭据只证明已读取说明，不代表执行或成功。阶段历史最多保留最近 20 条。</p>
-    <button class="rf-control-button" data-ui="refresh" type="button">暂停刷新</button>
+  <footer class="rf-footer"><button class="rf-text-button" type="button" data-ui="details" aria-expanded="false" aria-controls="rf-records"><span data-ui="details-label">查看详情</span><span class="rf-chevron" aria-hidden="true">⌄</span></button></footer>
+  <section class="rf-records" id="rf-records" data-ui="records" aria-label="任务详情" hidden>
+    <section class="rf-detail-section">
+      <h2>进展与下一步</h2>
+      <div class="rf-row"><span class="rf-label">进展</span><span class="rf-value" data-ui="change"></span></div>
+      <div class="rf-row"><span class="rf-label" data-ui="remaining-label">下一步</span><span class="rf-value" data-ui="remaining"></span></div>
+    </section>
+    <section class="rf-detail-section">
+      <h2>验证</h2><div class="rf-verification" data-ui="verification" aria-label="Agent 申报的验证结果"></div>
+      <p class="rf-evidence" data-ui="evidence"></p>
+    </section>
+    <section class="rf-detail-section">
+      <div class="rf-record-heading"><h2>阶段记录</h2><span data-ui="history-count"></span></div>
+      <ol class="rf-history" data-ui="history"></ol>
+      <button class="rf-text-button rf-more" type="button" data-ui="more-history" hidden>查看全部记录</button>
+    </section>
+    <details class="rf-disclosure" data-ui="method-section" hidden><summary>所选方法与阶段</summary><section class="rf-methods" data-ui="methods" aria-label="所选开发方法的阶段进度"></section></details>
+    <details class="rf-disclosure" data-ui="load-section" hidden><summary data-ui="load-heading">工作流与 Skill 加载记录</summary><ol class="rf-loads" data-ui="loads"></ol></details>
+    <p class="rf-source">阶段与验证由 Agent 申报；Skill 仅表示已读取说明，不代表执行或成功。</p>
+    <div class="rf-settings"><span data-ui="updated"></span><button class="rf-text-button" data-ui="refresh" type="button">暂停刷新</button></div>
   </section>
 </article>
 <p class="rf-notice" data-ui="connection" role="status"></p>

@@ -26,6 +26,16 @@ test('a failed overall check remains visible even when some test counts passed',
   const view=cardView({...base,status:'completed',details:{verification:{status:'failed',passed:20,evidence:'20 个用例通过，但另一项检查失败',source:'agent_declared'}}});
   assert.ok(view.verification.some(item=>item.text==='检查失败'));
   assert.ok(view.verification.some(item=>item.text==='20 项通过'));
+  assert.match(view.attention,/检查失败/);
+});
+
+test('collapsed cards retain verification gaps without treating completion as a pass',()=>{
+  assert.equal(cardView(base).attention,'');
+  const complete={...base,status:'completed'};
+  assert.equal(cardView(complete).attention,'验证：未执行');
+  assert.match(cardView({...complete,details:{verification:{status:'partial',source:'agent_declared'}}}).attention,/部分验证/);
+  assert.equal(cardView({...complete,details:{verification:{status:'passed',source:'agent_declared'}}}).attention,'');
+  assert.equal(cardView({...complete,details:{verification:{status:'passed',source:'planned'}}}).attention,'验证：未执行');
 });
 
 test('terminal views ignore stale actions and preserve partial verification',()=>{
