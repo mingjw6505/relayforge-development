@@ -1,0 +1,14 @@
+{
+  "go_version": "go1.25.1",
+  "goos": "windows",
+  "goarch": "386",
+  "go386": "sse2",
+  "cgo_enabled": "0",
+  "flags": [
+    "-trimpath",
+    "-buildvcs=false",
+    "-ldflags=-s -w -buildid="
+  ],
+  "source_sha256": "cca8c382361f63f819b58363e3f4be3f4bd9fa4fff519061f273230f3cf4d6aa",
+  "binary_sha256": "f0a7cac319ce89df6797ba347735fcb4aae4cf1a5b21fbad50451be384b435d0"
+}

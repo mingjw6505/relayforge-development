@@ -1,0 +1,31 @@
+#!/bin/sh
+# Windows resolves this same configured name to start_progress.exe.
+CDPATH= cd "${0%/*}/.." || exit 1
+probe='import sys, sqlite3; sys.exit(1) if sys.version_info < (3, 11) else print("RELAYFORGE_PYTHON=" + sys.executable)'
+selected_python=
+if [ -n "${RELAYFORGE_PYTHON:-}" ]; then
+    # An explicit executable is one literal path, including spaces.
+    selected_python=$("$RELAYFORGE_PYTHON" -c "$probe" </dev/null 2>/dev/null) || selected_python=
+else
+    for python_command in python3 python python3.15 python3.14 python3.13 python3.12 python3.11; do
+        if selected_python=$("$python_command" -c "$probe" </dev/null 2>/dev/null); then
+            case "$selected_python" in RELAYFORGE_PYTHON=/*) break ;; esac
+        fi
+        selected_python=
+    done
+fi
+case "$selected_python" in
+    RELAYFORGE_PYTHON=/*)
+        selected_python=${selected_python#RELAYFORGE_PYTHON=}
+        if [ "$#" -eq 1 ] && [ "$1" = '--doctor' ]; then
+            exec "$selected_python" -m progress_panel.doctor
+        fi
+        exec "$selected_python" -m progress_panel.server "$@"
+        ;;
+esac
+if [ "$#" -eq 1 ] && [ "$1" = '--doctor' ]; then
+    echo '{"status":"python_unavailable","host_tools":"unverified","host_ui":"unverified","state_directory":"unverified","message":"Check Python 3.11+, sqlite3, PATH and any strict RELAYFORGE_PYTHON override. No software was installed."}'
+else
+    echo 'RelayForge progress requires Python 3.11+ with sqlite3. Check PATH and any strict RELAYFORGE_PYTHON override. No software was installed.' >&2
+fi
+exit 78

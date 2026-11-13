@@ -89,6 +89,7 @@ def test_concurrent_updates_cannot_overwrite_newer_progress(
         [{"label": "", "status": "active"}],
         [{"label": "A", "status": "active"}, {"label": "B", "status": "active"}],
         [{"label": "A", "status": "done"}],
+        [{"label": "A", "status": "pending"}],
     ],
 )
 def test_invalid_start_does_not_create_a_run(

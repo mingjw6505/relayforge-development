@@ -105,7 +105,7 @@ L2/L3 也不因加载相同工作流而混淆。模式相邻升降级；变更�
 
 ## 运行与兼容
 
-- 宿主 PATH 中需要 Node.js 18+；引导器只用 Node 内置模块，不依赖 npm 包。
+- 当前注册无需 Node 或 Go；宿主需已有 Python 3.11+（含 SQLite）。
 - 服务需要 Python 3.11+（含 sqlite3），只用 Python 标准库；引导器自动选择已有兼容解释器。
 - 界面和 SDK 已打包，运行时无需 npm、CDN、API Key 或外部服务。
 - portable 注册使用根 `plugin.json` / `mcp.json`，兼容注册使用
@@ -115,56 +115,90 @@ L2/L3 也不因加载相同工作流而混淆。模式相邻升降级；变更�
 - 不支持 MCP Apps 的宿主可继续 Skill 和文字工作流。跨平台 App 行为仍需独立验收。
 - 已有 0.1.13 快照保留且可读取；缺少新增字段时显示未记录/未申报，不补造历史。
 
+### Automatic startup
+
+两份 MCP 注册统一调用插件内的 `./scripts/start_progress`，保留 `cwd: "./"`。
+每次启动都会选择当前可用的 Python，不修改注册、宿主设置或全局 PATH，
+不下载或安装运行时，也不缓存某台机器的解释器路径：
+
+- macOS/Linux 执行随包分发的 POSIX shell 脚本，依次探测 `python3`、`python`，
+  再探测 `python3.15` 至 `python3.11`。
+- Windows 的 Rust 进程启动规则会优先补全 `.exe`，因此同一注册调用随包分发的
+  `scripts/start_progress.exe`，依次探测 `py -3`、`python`、`python3`，再探测
+  `py -3.15` 至 `py -3.11`。
+- 所有候选均须满足 Python 3.11+ 且支持 SQLite；失败、旧版本或 Store 别名返回
+  9009 时继续下一候选。Windows 单次探测限时 1.5 秒，总探测预算 6.5 秒，
+  另有有界管道收尾，避免别名挂起阻塞注册；POSIX shell 入口无外部进程超时保证。
+- 探测不读取 MCP stdin，输出与错误不会混入协议 stdout。选定解释器后只启动
+  一次服务，保留服务退出码；服务失败不触发另一个解释器重新启动任务。
+- 候选全部不可用时，启动失败并向 stderr 给出 Python/PATH 检查提示，工作流
+  继续使用文字回退。仍须在宿主 PATH 中已有至少一个可工作的候选命令。
+
+启动字段与插件路径限制见 [Agent Plugins 规范](https://agent-plugins.org/specification)；
+Windows 扩展名选择见 [Rust Command 文档](https://doc.rust-lang.org/std/process/struct.Command.html#platform-specific-behavior)。
+Windows 启动器按 x86 构建；其他架构及桌面宿主行为仍须目标机验收。
+服务只依赖 Python 标准库；原生启动器自带所需 Go 运行代码，用户无需安装 Go。
+源码、许可证、构建版本与摘要见 [启动器构建说明](../scripts/progress_launcher/README.md)。
+
+插件更新同时携带固定注册和两种入口，无需用户执行配置脚本。上一版尚未发布的
+手动配置脚本与 cmd 入口已移除。打包回归检查两种入口、源码／二进制摘要和
+全新安装后再次覆盖注册的启动行为，避免把本机配置结果当作发布默认值。
+
+`RELAYFORGE_PYTHON` 可严格指定一个解释器路径（不能填 `py -3` 等命令串）。
+失败时不会偷偷改用其他 Python；路径仅来自用户环境，不写入插件注册。
+
 ## 环境自检与协助修复
 
-注册入口为 `node ./scripts/progress-launcher.cjs`，保留插件根目录 `cwd: "./"`。
-Node 必须对宿主进程可用；Agent 终端能运行 Node 不代表 App 的 PATH 一定相同。
-本次启动方式新增 Node.js 18+ 前提，宿主未提供时须单独检测并引导配置或安装。
-它解决 Python 命令名差异，不保证任意宿主完全零配置。
+保留已有隔离自检和条件恢复流程，主入口可直接运行自检，无需 Node：
 
-Windows 依次尝试 `py -3`、`python3`、`python`，再尝试 `py -3.15` 至
-`py -3.11`；macOS/Linux 尝试 `python3`、`python`，再尝试版本化命令
-`python3.15` 至 `python3.11`。每个候选最多 1.2 秒，总探测预算 6.5 秒。
-校验版本、sqlite3、有效 JSON 后使用返回的真实解释器绝对路径启动服务，不重复解析别名。
-不兼容解释器、空的 Windows Store 别名、超时和无法执行均不会被当作有效 Python。
-预算耗尽不等于电脑没有安装 Python。
-
-`RELAYFORGE_PYTHON` 可指定一个解释器可执行文件路径（不能填 `py -3` 等命令串）。
-该覆盖严格生效：失败会报告原因，不偷偷改用另一个环境。启动时不安装软件、
-不创建别名、不修改 PATH；服务退出后不自动重放 MCP 输入或更换解释器重试。
-
-在插件根目录执行：
-
-```sh
-node scripts/progress-launcher.cjs --doctor
+```powershell
+.\scripts\start_progress.exe --doctor
 ```
 
-自检 JSON 包含所选解释器、版本、候选失败分类以及包检查结果。检查模块加载、
-工具发现、打包 HTML 和临时目录内的 SQLite 读写；不读取真实任务，不检查真实
-状态目录读写权限。`host_tools`、`host_ui`、`state_directory` 明确标为
-`unverified`，避免把本地检查说成宿主 UI 验收。
-正常 MCP 启动不输出额外 stdout；诊断写 stderr，供宿主日志和 Agent 排查。
-自检模式才在 stdout 输出 JSON。
+macOS/Linux 使用 `./scripts/start_progress --doctor`。自检通过所选解释器运行
+`progress_panel.doctor`，检查模块、工具、打包 HTML 和临时目录内的 SQLite，
+不读取真实任务。`host_tools`、`host_ui`、`state_directory` 明确为 `unverified`。
+自检 JSON 只在 `--doctor` 模式输出；正常 MCP 的额外诊断仅写 stderr。
 
-| 结果 / 退出码 | 含义与后续动作 |
+| 结果 / 退出码 | 后续动作 |
 | --- | --- |
-| `runtime_ready` / 0 | 本地检查通过，继续确认宿主工具和实际卡片显示 |
-| `python_unavailable` / 78 | 未找到可用候选；按 failures 区分不存在、旧版本、SQLite 缺失、超时或无效别名，先查已有环境 |
-| `node_too_old` / 78 | 使用宿主提供或已安装的 Node.js 18+ |
-| `package_check_failed` / 70 | Python 正常但包/资源/临时 SQLite 检查失败，检查插件而非盲目重装 Python |
-| `server_spawn_failed` 或 `server_exited` / 非零 | 服务无法启动或异常退出，保留诊断且不自动重试 |
-| `invalid_arguments` / 64 | 启动仅接受无参数或 `--doctor` |
+| `runtime_ready` / 0 | 本地检查通过，继续确认宿主工具和卡片显示 |
+| `python_unavailable` / 78 | 查已有解释器、严格覆盖、版本、SQLite、PATH 或别名；预算耗尽不代表未安装 Python |
+| `package_check_failed` / 70 | Python 正常，检查插件包或临时 SQLite，不盲目重装 Python |
+| 服务非零退出 | 保留退出码，不切换解释器重放 MCP 输入 |
 
-若 Node 本身不存在，引导器不能运行，提醒依赖仍可加载的 Skill/Agent。
-Skill 负责一次性文字提醒并执行[环境恢复流程](../skills/task-router/references/progress-environment.md)：
-先检查已有运行时和入口；有授权时修复用户环境或支持的本地覆盖配置；确实缺少
-环境才通过官方来源协助安装，说明版本、范围、PATH 变更和权限要求并复用已有授权。
-普通开发请求不默认授权安装软件，不直接改插件缓存，也不绕过管理员或安全限制。
-若宿主不能执行命令，则提供手动步骤。插件整体未加载时无法保证自动提醒。
+[环境恢复流程](../skills/task-router/references/progress-environment.md) 保留一次性提醒、
+优先已有运行时、授权后协助修复／安装、运行时和宿主 UI 分层验收。开发请求不
+自动授权安装软件，不修改插件缓存，不绕过管理员或安全限制。插件整体未加载
+时无法保证自动提醒。旧 `scripts/progress-launcher.cjs` 及其测试作为可选兼容入口
+保留，不被当前 MCP 注册调用；只有使用该旧入口时才需要 Node.js 18+。
 
-服务正常但工具缺失时确认当前插件版本与聊天工具目录；必要时只做一次新聊天/加载验证。
-工具调用成功但卡片未显示时检查 MCP Apps 内嵌渲染支持，不通过重装 Python 处理。
-最终分别报告运行时、宿主 MCP、调用与可见性证据；UI 未确认就明确保留缺口。
+需要排查时，可选运行只读探针（正常启动不需要执行）：
+
+```powershell
+py -3 scripts/check_progress.py
+```
+
+macOS/Linux 使用 `python3 scripts/check_progress.py`，或用可用的 `python`
+替代。探针通过临时数据目录验证实际启动及 `initialize`、`tools/list`，不创建
+任务、不读取真实任务／Hook 日志、不改注册。Python 的 Windows 进程封装与
+Rust 的扩展名规则不同，因此该探针显式选取随包分发的 `.exe`；宿主自动解析
+和 inline 渲染仍需在目标 Codex 中独立验证。
+
+可按以下三层排查：
+
+1. 启动探针失败：检查是否存在可工作的 Python 3.11+／SQLite／PATH，服务尚未注册。
+2. 探针通过但聊天里没有工具：重新加载已更新的插件，用新聊天检查；旧聊天
+   不会因为单独启动服务就必然补充工具，避免循环重启。加载方式见
+   [OpenAI 插件打包说明](https://developers.openai.com/plugins/build/plugins)。
+3. 工具可用但创建卡片报步骤错误：`start_progress` 必须恰有一个 `active`
+   步骤，不能把唯一的步骤设为 `pending`。继续使用同一任务的 ID 和 revision；
+   收尾、提交或推送阶段也沿用该卡片，工具缺失时继续文字回退。
+
+`progress_panel/tests/test_launcher.py` 验证真实 MCP 发现、更新不需配置、
+POSIX 回退及随包 Windows 产物。Go 启动器测试通过真实子进程覆盖旧解释器、
+9009、探测挂起、参数与 stdin 传递以及服务退出码；可在 Windows 上运行同一组
+测试，但其他系统上的通过不代表 Windows 原生或宿主渲染验收通过。
 
 ## 更新与隔离
 

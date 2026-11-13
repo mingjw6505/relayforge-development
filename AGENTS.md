@@ -15,7 +15,8 @@ optional Codex Hook telemetry. It is not a RelayForge application service.
 - `progress_panel/`: standard-library Python MCP stdio server and SQLite state.
 - `progress_panel/web/`: UI source, locked build dependencies and Node tests.
   `progress_panel/static/panel.html` and `THIRD_PARTY_NOTICES.txt` are shipped outputs.
-- `hooks/` and `scripts/`: optional local telemetry and workflow analysis helpers.
+- `hooks/` and `scripts/`: optional local telemetry, workflow analysis helpers and
+  the bundled cross-platform progress launcher.
 - `tests/`: workflow, helper, telemetry and skill dependency tests;
   `progress_panel/tests/`: server, state, execution and packaging tests.
 - `third-party/`: pinned upstream resources and licenses; `docs/`: detailed contracts.
@@ -62,10 +63,13 @@ optional Codex Hook telemetry. It is not a RelayForge application service.
 ## Progress panel and telemetry
 
 - Keep `mcp.json` and `.mcp.json` equivalent apart from portable schema/type fields.
-  Preserve plugin-relative `cwd: "./"`; the registered Node.js 18+ launcher selects
-  an existing Python 3.11+ with sqlite3. Keep diagnostics off MCP stdout.
-- Keep server runtime dependencies in the Python standard library and the
-  bootstrap in Node built-ins (no runtime npm dependencies). npm packages
+  Preserve plugin-relative `cwd: "./"` and the shared `./scripts/start_progress`
+  entrypoint. Ship both the executable POSIX script and matching Windows `.exe`;
+  startup must probe Python 3.11+ without per-machine configuration or runtime downloads.
+  Launcher source changes require rebuilding the Windows artifact and its build record
+  with `scripts/build_progress_launcher.py`, then checking reproducible bytes.
+  Go is a launcher development tool only; preserve its bundled runtime license.
+- Keep server runtime dependencies in the Python standard library. npm packages
   are for UI development; the shipped UI must work without runtime npm or a CDN.
 - Edit UI source under `progress_panel/web/src/`, then rebuild the shipped HTML
   and license notices. Rebuild on version changes too: the UI embeds `plugin.json`
@@ -103,9 +107,13 @@ python3 -m pytest progress_panel/tests
 python3 -m mypy --strict progress_panel/state.py progress_panel/server.py progress_panel/skills.py
 ```
 
-For bootstrap changes also run `node --test scripts/progress-launcher.test.cjs`
-and `node scripts/progress-launcher.cjs --doctor`. A passing isolated doctor does
-not verify real state-directory permissions or host UI rendering.
+For bootstrap changes run the Go launcher tests and reproducible build check in
+`scripts/progress_launcher/README.md`, plus `python3 scripts/check_progress.py` and
+the registered entrypoint with `--doctor` (use `.exe` explicitly on Windows).
+Retain the optional legacy Node launcher checks while that compatibility entry
+exists: `node --test scripts/progress-launcher.test.cjs` and
+`node scripts/progress-launcher.cjs --doctor`. An isolated doctor does not verify
+real state-directory permissions or host UI rendering.
 
 For UI source, build tooling or embedded version changes, run:
 

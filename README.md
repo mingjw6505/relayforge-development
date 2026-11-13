@@ -24,6 +24,11 @@ Claude Code, ChatGPT, and compatible agent hosts.
 - `scripts/workflow_logger.py` — metadata-only Hook event logger.
 - `scripts/analyze_workflow_logs.py` — local timing report generator.
 - `scripts/analyze_workflow_benchmark.py` — baseline/candidate benchmark analyzer.
+- `scripts/start_progress` / `scripts/start_progress.exe` — automatic platform
+  entrypoints; Python detection runs at startup without configuration edits.
+- `scripts/progress_launcher/` — native launcher source, build record and license;
+  `scripts/build_progress_launcher.py` rebuilds or verifies the Windows artifact.
+- `scripts/check_progress.py` — optional MCP startup and discovery probe.
 - `progress_panel/` — Python MCP server, SQLite task state and bundled inline UI.
 - `progress_panel/web/` — UI source, build tooling and Node tests.
 - `progress_panel/tests/` — progress state, protocol, execution and packaging tests.
@@ -194,26 +199,39 @@ tool to produce actual instruction-read receipts. External Skills, direct file r
 and host-provided instructions actually used for the task are synchronized through
 `skill_uses` on progress start/update. The compact list merges names; details distinguish
 tool reads from Agent use declarations. Unreported use cannot be captured automatically.
-These records remain separate from declared work and verification. The bootstrap
-requires Node.js 18+ and selects an existing Python 3.11+ with sqlite3. It uses Node
-built-ins, not runtime npm packages; an API key, Hook trust and raw logs are not
-required. See [setup and limits](docs/progress-panel.md).
+These records remain separate from declared work and verification. Python 3.11+
+with sqlite3 is required; Node, Go, runtime npm packages, an API key, Hook trust
+and raw logs are not required. See [setup and limits](docs/progress-panel.md).
 
-The registered command is `node ./scripts/progress-launcher.cjs`, with the
-working directory resolved from the plugin root. Node must be available to the
-host process (18+; a trusted host-provided runtime may be used). The launcher
-tries existing Python command names/Windows `py` and validates Python 3.11+ plus
-sqlite3, so a missing `python3` alias alone no longer blocks startup. Set
-`RELAYFORGE_PYTHON` to a verified executable path to select another installation.
-No software is installed and PATH is not changed during startup.
+The registered command is `./scripts/start_progress` on every system. The package
+ships a POSIX shell entrypoint for macOS/Linux and a matching Windows executable;
+Windows process resolution selects `start_progress.exe`. Each startup probes
+Python 3.11+ with SQLite support: `python3`, then `python` on macOS/Linux;
+`py -3`, `python`, then `python3` on Windows, followed by versioned 3.15 through
+3.11 candidates on each platform. `RELAYFORGE_PYTHON` strictly selects a single
+executable path when set. Failed or unsupported candidates are
+skipped, including a Store alias returning 9009. At least one working candidate
+must be available through the host's PATH.
 
-Run `node scripts/progress-launcher.cjs --doctor` from the plugin root for bounded
-JSON diagnostics. MCP startup failures remain on stderr with an actionable error
-category. The conditional [environment recovery workflow](skills/task-router/references/progress-environment.md)
-notifies the user, prefers existing runtime repairs, and assists authorized
-installation only when needed. A missing card does not prove missing Python.
-Hosts without MCP Apps use text updates; successful runtime checks do not prove
-inline rendering. New tools may require a new chat after a plugin update.
+No setup script, registration rewrite, machine-specific path, Node runtime or
+Go installation is required. Updates ship the same registration and both
+entrypoints, so there is no per-machine configuration to repeat. The bootstrap
+never installs Python or changes PATH. See [automatic startup and diagnostics](docs/progress-panel.md#automatic-startup).
+
+The registered entrypoint also supports `--doctor` for isolated package, tools,
+HTML and SQLite checks: use `./scripts/start_progress --doctor` on macOS/Linux
+or `.\scripts\start_progress.exe --doctor` in PowerShell. It keeps host loading,
+rendering and real state permissions explicitly unverified. The conditional
+[environment recovery workflow](skills/task-router/references/progress-environment.md)
+notifies once and assists authorized repairs without blocking development.
+
+For optional diagnostics, run `python3 scripts/check_progress.py` on macOS/Linux
+or `py -3 scripts/check_progress.py` on Windows (use `python` if needed). This
+checks real MCP startup and tool discovery without changing configuration or
+creating a task. It does not prove inline rendering. Reload the updated plugin
+and check its tools in a new chat. Hosts without MCP Apps can use skills and text
+updates. Launcher source and reproducible build instructions are in
+[scripts/progress_launcher](scripts/progress_launcher/README.md).
 
 The tools create (`start_progress`), update (`update_progress`) and reopen
 (`open_progress`, on request) a task card. `load_progress_skill` reads a selected

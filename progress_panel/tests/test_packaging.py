@@ -1,6 +1,7 @@
 """Keep portable and legacy registration aligned and relocatable."""
 
 import json
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -25,8 +26,12 @@ def test_manifests_and_mcp_registration_are_aligned() -> None:
     assert server == legacy["mcpServers"]["relayforge-progress"]
     # Agent Plugins requires ./ (a bare dot is invalid and Codex ignores it).
     assert server["cwd"] == "./"
-    assert server["command"] == "node"
-    assert server["args"] == ["./scripts/progress-launcher.cjs"]
+    assert server["command"] == "./scripts/start_progress"
+    assert server["args"] == []
+    assert (ROOT / "scripts/start_progress").is_file()
+    if os.name != "nt":
+        assert (ROOT / "scripts/start_progress").stat().st_mode & 0o111
+    assert (ROOT / "scripts/start_progress.exe").is_file()
     assert manifests[0]["extensions"]["com.openai"]["mcpServers"] == "./.mcp.json"
     assert all(manifest["mcpServers"] == "./.mcp.json" for manifest in manifests[1:])
     assert (ROOT / "progress_panel/static/panel.html").is_file()
